@@ -21,7 +21,7 @@ PROJECT_ROOT = Path(os.getenv("BFCL_PROJECT_ROOT", Path(__file__).resolve().pare
 
 RESULT_PATH = PROJECT_ROOT / "result"
 SCORE_PATH = PROJECT_ROOT / "score"
-DOTENV_PATH = PROJECT_ROOT / ".env"
+DOTENV_PATH = PROJECT_ROOT / "bfcl_eval/.env.example"
 TEST_IDS_TO_GENERATE_PATH = PROJECT_ROOT / "test_case_ids_to_generate.json"
 # Directory that stores all lock files (kept out of the results tree)
 LOCK_DIR = PROJECT_ROOT / ".file_locks"

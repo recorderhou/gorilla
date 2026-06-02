@@ -28,8 +28,14 @@ class QwenAPIHandler(OpenAICompletionsHandler):
         super().__init__(model_name, temperature, registry_name, is_fc_model, **kwargs)
         self.model_style = ModelStyle.OPENAI_COMPLETIONS
         self.client = OpenAI(
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-            api_key=os.getenv("QWEN_API_KEY"),
+            # base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            # base_url="https://gxyic6xcxga9kmll.us-east-1.aws.endpoints.huggingface.cloud/v1",
+            # base_url="https://gqytezc8wz28n8x9.us-east-1.aws.endpoints.huggingface.cloud/v1",
+            # base_url="https://qbmwboyur1jkwgsn.us-east-1.aws.endpoints.huggingface.cloud/v1",
+            # base_url="https://r8r2ub3435iqeb1f.us-east-1.aws.endpoints.huggingface.cloud/v1",
+            base_url="https://d6pr56pomjcrtwdq.us-east-1.aws.endpoints.huggingface.cloud/v1",
+            # base_url="https://gxyic6xcxga9kmll.us-east-1.aws.endpoints.huggingface.cloud/v1",
+            api_key=os.getenv("HF_TOKEN"),
         )
 
     #### FC methods ####
@@ -40,18 +46,31 @@ class QwenAPIHandler(OpenAICompletionsHandler):
         tools = inference_data["tools"]
         inference_data["inference_input_log"] = {"message": repr(message), "tools": tools}
 
+        import json
+        try:
+            # 验证tools是否是合法JSON
+            json.dumps(tools)
+            print("tools JSON OK")
+        except Exception as e:
+            print(f"tools JSON ERROR: {e}")
+
+        try:
+            json.dumps(message)
+            print("message JSON OK")  
+        except Exception as e:
+            print(f"message JSON ERROR: {e}")
+
         return self.generate_with_backoff(
             messages=inference_data["message"],
-            model=self.model_name.replace("-FC", ""),
+            model="Corleone1/qwen-bfcl-batch-new-0",
+            # model="Qwen/Qwen2.5-3B-Instruct",
             tools=tools,
             parallel_tool_calls=True,
-            extra_body={
-                "enable_thinking": True
-            },
             stream=True,
             stream_options={
                 "include_usage": True
             },  # retrieving token usage for stream response
+            max_tokens=1024,
         )
 
     @override
@@ -65,11 +84,13 @@ class QwenAPIHandler(OpenAICompletionsHandler):
                 continue
 
             delta = chunk.choices[0].delta
+            
 
             if hasattr(delta, "reasoning_content") and delta.reasoning_content is not None:
                 reasoning_content += delta.reasoning_content
 
             if hasattr(delta, "content") and delta.content:
+                # print("current answer context delta", delta.content)
                 answer_content += delta.content
 
             if hasattr(delta, "tool_calls") and delta.tool_calls:
@@ -79,41 +100,69 @@ class QwenAPIHandler(OpenAICompletionsHandler):
 
                     # Dynamically extend the tool info storage list
                     while len(tool_info) <= index:
-                        tool_info.append({})
+                        tool_info.append({
+                            "id": "",
+                            "name": "",
+                            "arguments": ""})
+                    try:
+                        # Aggregate the streaming chunks of each field
+                        if tool_call.id:
+                            tool_info[index]["id"] = (
+                                tool_info[index].get("id", "") + tool_call.id
+                            )
+                        if tool_call.function and tool_call.function.name:
+                            tool_info[index]["name"] = (
+                                tool_info[index].get("name", "") + tool_call.function.name
+                            )
+                        if tool_call.function and tool_call.function.arguments:
+                            tool_info[index]["arguments"] = (
+                                tool_info[index].get("arguments", "")
+                                + tool_call.function.arguments
+                            )
+                    except:
+                        breakpoint()
 
-                    # Aggregate the streaming chunks of each field
-                    if tool_call.id:
-                        tool_info[index]["id"] = (
-                            tool_info[index].get("id", "") + tool_call.id
-                        )
-                    if tool_call.function and tool_call.function.name:
-                        tool_info[index]["name"] = (
-                            tool_info[index].get("name", "") + tool_call.function.name
-                        )
-                    if tool_call.function and tool_call.function.arguments:
-                        tool_info[index]["arguments"] = (
-                            tool_info[index].get("arguments", "")
-                            + tool_call.function.arguments
-                        )
-
+        # print("current answer_content", answer_content)
+        # print("current tool call", tool_info)
         tool_call_ids = []
         for item in tool_info:
             tool_call_ids.append(item["id"])
+        if len(tool_info) == 0 and "<tool_call>" in answer_content:
+
+            import re, json, uuid
+            matches = re.findall(r'<tool_call>(.*?)</tool_call>', answer_content, re.DOTALL)
+            if matches:
+                tool_info = []
+                for match in matches:
+                    try:
+                        fc = json.loads(match.strip())
+                        tool_info.append({
+                            "id": f"call_{uuid.uuid4().hex[:8]}",
+                            "name": fc["name"],
+                            "arguments": json.dumps(fc["arguments"], ensure_ascii=False)
+                        })
+                    except Exception:
+                        pass
 
         if len(tool_info) > 0:
+            # print("HAVE TOOL CALL!!!!!")
             # Build tool_calls structure required by OpenAI-compatible API
             tool_calls_for_history = []
             for item in tool_info:
-                tool_calls_for_history.append(
-                    {
-                        "id": item["id"],
-                        "type": "function",
-                        "function": {
-                            "name": item["name"],
-                            "arguments": item["arguments"],
-                        },
-                    }
-                )
+                try:
+                    # print("CURRENT ITEM: ", item)
+                    tool_calls_for_history.append(
+                        {
+                            "id": item["id"],
+                            "type": "function",
+                            "function": {
+                                "name": item["name"],
+                                "arguments": item["arguments"],
+                            },
+                        }
+                    )
+                except:
+                    breakpoint()
 
             model_response = [{item["name"]: item["arguments"]} for item in tool_info]
             model_response_message_for_chat_history = {
