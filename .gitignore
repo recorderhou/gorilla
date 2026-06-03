@@ -25,9 +25,12 @@ berkeley-function-call-leaderboard/result/
 # Ignore leaderboard score
 berkeley-function-call-leaderboard/score/
 
+# Ignore benchmark dataset files (large, download separately)
+berkeley-function-call-leaderboard/bfcl_eval/data/*.json
+
 # Ignore environment variables
 berkeley-function-call-leaderboard/.env
-!berkeley-function-call-leaderboard/bfcl_eval/.env.example
+berkeley-function-call-leaderboard/bfcl_eval/.env.example
 
 # Ignore config file for generating test cases
 berkeley-function-call-leaderboard/test_case_ids_to_generate.json
