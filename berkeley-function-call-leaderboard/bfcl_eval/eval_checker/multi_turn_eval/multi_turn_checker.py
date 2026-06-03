@@ -86,6 +86,7 @@ def multi_turn_checker(
                     "valid": False,
                     "error_message": f"Model response list is empty for turn {turn_index}",
                     "error_type": "multi_turn:empty_turn_model_response",
+                    "failing_turn_index": turn_index,
                     "details": {
                         "execution_result": execution_results,
                     },
@@ -106,6 +107,7 @@ def multi_turn_checker(
         # Check the state of the instances
         state_check_result = state_checker(model_instances, ground_truth_instances)
         if not state_check_result["valid"]:
+            state_check_result["failing_turn_index"] = turn_index
             state_check_result["execution_result"] = execution_results
             return state_check_result
 
@@ -117,6 +119,7 @@ def multi_turn_checker(
             turn_index,
         )
         if not response_check_result["valid"]:
+            response_check_result["failing_turn_index"] = turn_index
             return response_check_result
 
         # # Check the method invoke order
