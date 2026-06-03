@@ -390,7 +390,6 @@ class BaseHandler:
 
         return all_model_response, metadata
 
-    @final
     def inference_multi_turn_prompting(
         self,
         test_entry: dict,
