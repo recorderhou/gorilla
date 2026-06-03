@@ -595,6 +595,9 @@ class QwenFCHintedHandler(QwenFCHandler):
                     # (3b) Valid function call — ask the judge whether it is correct.
                     # Skip judging on the last allowed retry to avoid an infinite loop
                     # if the judge keeps returning Bad.
+                    for _tc in fc_message.get("tool_calls") or []:
+                        _n, _a = (_tc["function"]["name"], _tc["function"]["arguments"]) if "function" in _tc else (_tc["name"], _tc["arguments"])
+                        print(f"  [FC] {_n}({json.dumps(_a) if isinstance(_a, dict) else _a})")
                     if hint_retry < self.max_hint_retries:
                         current_state = self._serialize_state(involved_instances)
                         verdict, judge_raw = self._run_judge(
