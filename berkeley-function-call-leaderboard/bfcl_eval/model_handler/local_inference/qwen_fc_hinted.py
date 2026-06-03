@@ -41,6 +41,7 @@ from bfcl_eval.eval_checker.multi_turn_eval.multi_turn_utils import (
 from openai import OpenAI, RateLimitError
 
 from bfcl_eval.model_handler.local_inference.qwen_fc import QwenFCHandler
+from overrides import override
 from bfcl_eval.model_handler.utils import add_memory_instruction_system_prompt, retry_with_backoff
 from bfcl_eval.utils import extract_test_category_from_id, is_memory, is_memory_prereq
 
@@ -414,6 +415,7 @@ class QwenFCHintedHandler(QwenFCHandler):
 
     # ── Core override ─────────────────────────────────────────────────────────
 
+    @override
     def inference_multi_turn_prompting(
         self,
         test_entry: dict,
