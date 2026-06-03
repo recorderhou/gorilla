@@ -577,6 +577,8 @@ class QwenFCHintedHandler(QwenFCHandler):
                             user_request,
                         )
                         print(f"  [Complete] verdict={verdict}")
+                        if complete_hint:
+                            print(f"  [Complete Hint] {complete_hint!r}")
                         if verdict == "Done" or count >= MAXIMUM_STEP_LIMIT:
                             turn_done = True
                             break
@@ -606,6 +608,7 @@ class QwenFCHintedHandler(QwenFCHandler):
                             hint_text = self._run_hinter(
                                 judge_raw, fc_message, inference_data["function"]
                             )
+                            print(f"  [Hint] {hint_text!r}")
                             # Log the full correction event for offline analysis.
                             self._write_hint_log({
                                 "test_entry_id": test_entry_id,
