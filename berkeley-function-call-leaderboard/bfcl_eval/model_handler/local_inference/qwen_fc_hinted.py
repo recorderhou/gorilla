@@ -504,6 +504,10 @@ class QwenFCHintedHandler(QwenFCHandler):
             user_msgs = [m for m in current_turn_message if m.get("role") == "user"]
             user_request = user_msgs[0]["content"] if user_msgs else ""
 
+            print("=" * 100)
+            print(f"ID: {test_entry_id.replace('multi_turn_', '')}, Turn: {turn_idx}")
+            print(f"  [User] {user_request}")
+
             count = 0
             while True:
                 print("-" * 100)
