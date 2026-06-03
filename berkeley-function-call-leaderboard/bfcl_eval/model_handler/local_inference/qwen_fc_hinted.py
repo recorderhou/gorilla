@@ -259,7 +259,7 @@ class QwenFCHintedHandler(QwenFCHandler):
                 parts.append(f"User: {m.get('content') or ''}")
             elif role == "assistant" and m.get("tool_calls"):
                 for tc in m["tool_calls"]:
-                    fn = tc["function"]
+                    fn = tc["function"] if "function" in tc else tc
                     args = fn["arguments"]
                     if isinstance(args, dict):
                         args = json.dumps(args)
@@ -291,19 +291,23 @@ class QwenFCHintedHandler(QwenFCHandler):
 
         # Format tool name and args for the prompt.
         # Parallel tool calls (multiple <tool_call> tags) are joined as a list.
+        # QwenFCHandler uses flat format {"name":..., "arguments":...};
+        # OpenAI-compatible handlers use {"function": {"name":..., "arguments":...}}.
+        def _tc_name_args(tc):
+            if "function" in tc:
+                fn = tc["function"]
+                return fn["name"], fn["arguments"]
+            return tc["name"], tc["arguments"]
+
         if len(tool_calls) == 1:
-            fn = tool_calls[0]["function"]
-            tool_name = fn["name"]
-            args = fn["arguments"]
+            tool_name, args = _tc_name_args(tool_calls[0])
             tool_args = json.dumps(args) if isinstance(args, dict) else str(args)
         else:
-            tool_name = ", ".join(tc["function"]["name"] for tc in tool_calls)
+            names_args = [_tc_name_args(tc) for tc in tool_calls]
+            tool_name = ", ".join(n for n, _ in names_args)
             tool_args = "\n".join(
-                f"{tc['function']['name']}: "
-                + (json.dumps(tc["function"]["arguments"])
-                   if isinstance(tc["function"]["arguments"], dict)
-                   else str(tc["function"]["arguments"]))
-                for tc in tool_calls
+                f"{n}: " + (json.dumps(a) if isinstance(a, dict) else str(a))
+                for n, a in names_args
             )
 
         prompt = JUDGE_PROMPT.format(
@@ -325,19 +329,22 @@ class QwenFCHintedHandler(QwenFCHandler):
         hinter can reference specific tool names or argument names.
         """
         tool_calls = fc_message.get("tool_calls") or []
+
+        def _tc_name_args(tc):
+            if "function" in tc:
+                fn = tc["function"]
+                return fn["name"], fn["arguments"]
+            return tc["name"], tc["arguments"]
+
         if len(tool_calls) == 1:
-            fn = tool_calls[0]["function"]
-            tool_name = fn["name"]
-            args = fn["arguments"]
+            tool_name, args = _tc_name_args(tool_calls[0])
             tool_args = json.dumps(args) if isinstance(args, dict) else str(args)
         else:
-            tool_name = ", ".join(tc["function"]["name"] for tc in tool_calls)
+            names_args = [_tc_name_args(tc) for tc in tool_calls]
+            tool_name = ", ".join(n for n, _ in names_args)
             tool_args = "\n".join(
-                f"{tc['function']['name']}: "
-                + (json.dumps(tc["function"]["arguments"])
-                   if isinstance(tc["function"]["arguments"], dict)
-                   else str(tc["function"]["arguments"]))
-                for tc in tool_calls
+                f"{n}: " + (json.dumps(a) if isinstance(a, dict) else str(a))
+                for n, a in names_args
             )
         return self._call_llm(HINTER_PROMPT.format(
             schema=json.dumps(schema, indent=2),
