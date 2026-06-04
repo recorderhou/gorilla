@@ -60,7 +60,7 @@ JUDGE_PROMPT = """You are evaluating a model's response in a tool-use conversati
 
 ## Evaluation Criteria
 Evaluate ALL tool calls in the response. For each tool call:
-0. Are the arguments a valid dict {}? (not "" or null)
+0. Are the arguments a valid dict {{}}? (not "" or null)
 1. Is the tool name valid (exists in available tools)?
 2. Are all required arguments present and correctly typed?
 3. Are the state preconditions satisfied? (required prior actions completed, necessary state conditions met)
@@ -77,6 +77,9 @@ If any answer is No, the final verdict is Bad. If all answers are Yes, the final
 
 ## Conversation History (prior turns and steps)
 {history}
+
+## Previous Hints Given (earlier retries for this step)
+{previous_hints}
 
 ## Current System State
 {current_state}
@@ -105,6 +108,9 @@ HINTER_PROMPT = """A model needs guidance on generating a function call.
 ## Available Tools
 {schema}
 
+## Previous Hints and Retries (earlier attempts in this step)
+{previous_hints}
+
 ## The Function Call with Issues
 Function: {tool_name}
 Arguments: {tool_args}
@@ -114,6 +120,7 @@ Arguments: {tool_args}
 
 Based on the evaluation above, in ONE sentence point out what to pay attention to when generating the function call for this task.
 Reference the specific tool name or argument if relevant.
+If previous hints pointed out conflicting constraints, try a different strategy to satisfy both.
 Do NOT reference question numbers. Do NOT give the correct answer. Do NOT ask a question.
 Write as general guidance, not as a correction of a specific mistake.
 
@@ -279,13 +286,14 @@ class QwenFCHintedHandler(QwenFCHandler):
         history: list,
         current_state: str,
         schema: list,
+        hint_history: Optional[list[dict]] = None,
     ) -> tuple[str, str]:
         """
         Ask the judge LLM to evaluate the small model's function call.
 
-        fc_message: the assistant message containing the tool call(s) to evaluate.
-        history:    the conversation up to (but not including) this FC — i.e. what
-                    the small model was shown when it produced this call.
+        fc_message:   the assistant message containing the tool call(s) to evaluate.
+        history:      clean conversation history up to the current step (no intermediate hints).
+        hint_history: list of {fc_message, hint} dicts from earlier retries in this step.
         Returns (verdict, raw_judge_output) where verdict is "Good" or "Bad".
         """
         tool_calls = fc_message.get("tool_calls") or []
@@ -304,6 +312,10 @@ class QwenFCHintedHandler(QwenFCHandler):
                 return fn["name"], fn["arguments"]
             return tc["name"], tc["arguments"]
 
+        def _fmt_tc(tc):
+            n, a = _tc_name_args(tc)
+            return f"{n}({json.dumps(a) if isinstance(a, dict) else str(a)})"
+
         if len(tool_calls) == 1:
             tool_name, args = _tc_name_args(tool_calls[0])
             tool_args = json.dumps(args) if isinstance(args, dict) else str(args)
@@ -315,10 +327,21 @@ class QwenFCHintedHandler(QwenFCHandler):
                 for n, a in names_args
             )
 
+        if hint_history:
+            prev_parts = []
+            for i, entry in enumerate(hint_history):
+                prev_tcs = entry["fc_message"].get("tool_calls") or []
+                fc_str = ", ".join(_fmt_tc(tc) for tc in prev_tcs) if prev_tcs else "(no FC)"
+                prev_parts.append(f"Retry {i + 1}:\n  FC: {fc_str}\n  Hint: {entry['hint']}")
+            previous_hints = "\n".join(prev_parts)
+        else:
+            previous_hints = "(none)"
+
         prompt = JUDGE_PROMPT.format(
             current_state=current_state,
             schema=json.dumps(schema, indent=2),
             history=self._fmt_messages(history),
+            previous_hints=previous_hints,
             tool_name=tool_name,
             tool_args=tool_args,
         )
@@ -327,11 +350,17 @@ class QwenFCHintedHandler(QwenFCHandler):
         verdict = m.group(1).strip() if m else "Bad"  # default Bad if tag is missing
         return verdict, raw
 
-    def _run_hinter(self, judge_raw: str, fc_message: dict, schema: list) -> str:
+    def _run_hinter(
+        self,
+        judge_raw: str,
+        fc_message: dict,
+        schema: list,
+        hint_history: Optional[list[dict]] = None,
+    ) -> str:
         """
         Given the judge's full output, ask the hinter LLM to produce a single
-        actionable hint sentence. The wrong FC and schema are included so the
-        hinter can reference specific tool names or argument names.
+        actionable hint sentence. The wrong FC, schema, and prior hints are
+        included so the hinter avoids repeating guidance already given.
         """
         tool_calls = fc_message.get("tool_calls") or []
 
@@ -341,6 +370,10 @@ class QwenFCHintedHandler(QwenFCHandler):
                 return fn["name"], fn["arguments"]
             return tc["name"], tc["arguments"]
 
+        def _fmt_tc(tc):
+            n, a = _tc_name_args(tc)
+            return f"{n}({json.dumps(a) if isinstance(a, dict) else str(a)})"
+
         if len(tool_calls) == 1:
             tool_name, args = _tc_name_args(tool_calls[0])
             tool_args = json.dumps(args) if isinstance(args, dict) else str(args)
@@ -351,8 +384,20 @@ class QwenFCHintedHandler(QwenFCHandler):
                 f"{n}: " + (json.dumps(a) if isinstance(a, dict) else str(a))
                 for n, a in names_args
             )
+
+        if hint_history:
+            prev_parts = []
+            for i, entry in enumerate(hint_history):
+                prev_tcs = entry["fc_message"].get("tool_calls") or []
+                fc_str = ", ".join(_fmt_tc(tc) for tc in prev_tcs) if prev_tcs else "(no FC)"
+                prev_parts.append(f"Retry {i + 1}:\n  FC: {fc_str}\n  Hint: {entry['hint']}")
+            previous_hints = "\n".join(prev_parts)
+        else:
+            previous_hints = "(none)"
+
         return self._call_llm(HINTER_PROMPT.format(
             schema=json.dumps(schema, indent=2),
+            previous_hints=previous_hints,
             tool_name=tool_name,
             tool_args=tool_args,
             judge_output=judge_raw,
@@ -542,6 +587,7 @@ class QwenFCHintedHandler(QwenFCHandler):
                 final_response_data: Optional[dict] = None
                 turn_done            = False
                 latest_hint: Optional[str] = None   # most recent hint from the hinter LLM
+                step_hint_history:   list[dict] = []  # all {fc_message, hint} from this step's retries
 
                 while hint_retry <= self.max_hint_retries:
 
@@ -587,6 +633,17 @@ class QwenFCHintedHandler(QwenFCHandler):
                             current_state,
                             user_request,
                         )
+                        self._write_hint_log({
+                            "type":          "complete_check",
+                            "test_entry_id": test_entry_id,
+                            "turn_idx":      turn_idx,
+                            "step":          count,
+                            "hint_retry":    hint_retry,
+                            "user_request":  user_request,
+                            "model_text":    model_responses,
+                            "verdict":       verdict,
+                            "hint":          complete_hint,
+                        })
                         if self.debug:
                             print(f"  [Complete] verdict={verdict}")
                             if complete_hint:
@@ -618,26 +675,31 @@ class QwenFCHintedHandler(QwenFCHandler):
                             inference_data["message"],  # context the model actually saw
                             current_state,
                             inference_data["function"],
+                            hint_history=step_hint_history,
                         )
                         if self.debug:
                             print(f"  [Judge] verdict={verdict}, retry={hint_retry}")
                             print(f"  [Judge Raw] {judge_raw[:500]}")
                         if verdict == "Bad":
                             hint_text = self._run_hinter(
-                                judge_raw, fc_message, inference_data["function"]
+                                judge_raw, fc_message, inference_data["function"],
+                                hint_history=step_hint_history,
                             )
                             if self.debug:
                                 print(f"  [Hint] {hint_text!r}")
                             # Log the full correction event for offline analysis.
                             self._write_hint_log({
+                                "type":          "judge_hinter",
                                 "test_entry_id": test_entry_id,
                                 "turn_idx":      turn_idx,
                                 "step":          count,
                                 "hint_retry":    hint_retry,
+                                "user_request":  user_request,
                                 "fc_message":    fc_message,
                                 "judge_raw":     judge_raw,
                                 "hint":          hint_text,
                             })
+                            step_hint_history.append({"fc_message": fc_message, "hint": hint_text})
                             latest_hint = hint_text
                             hint_retry += 1
                             continue
