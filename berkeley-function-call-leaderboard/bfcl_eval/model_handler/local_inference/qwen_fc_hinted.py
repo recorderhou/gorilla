@@ -54,12 +54,13 @@ from bfcl_eval.utils import extract_test_category_from_id, is_memory, is_memory_
 
 # Judge: evaluates the small model's function call against 8 criteria.
 # Outputs yes/no per criterion + <verdict>Good/Bad</verdict> + plain explanation if Bad.
-JUDGE_PROMPT = """You are evaluating a single function call in a tool-use conversation.
+JUDGE_PROMPT = """You are evaluating a model's response in a tool-use conversation. The response may contain one or more tool calls.
 
-[CRITICAL] Tool-only responses are complete. DO NOT mark a response as Bad just because it lacks a user-facing explanation or follow-up message. A tool call is a standalone step.
+[CRITICAL] Tool-only responses are complete. DO NOT mark a response as Bad just because it lacks a user-facing explanation or follow-up message. Multiple tool calls in a single response are ALWAYS acceptable.
 
 ## Evaluation Criteria
-0. Is the function call syntactically valid? (arguments must be a dict {{}}, not "" or null)
+Evaluate ALL tool calls in the response. For each tool call:
+0. Are the arguments a valid dict {}? (not "" or null)
 1. Is the tool name valid (exists in available tools)?
 2. Are all required arguments present and correctly typed?
 3. Are the state preconditions satisfied? (required prior actions completed, necessary state conditions met)
@@ -99,22 +100,22 @@ If Bad, in plain language explain what is wrong (no question numbers, no correct
 
 # Hinter: receives the judge's full output and distills it into one actionable sentence.
 # Does NOT reveal the correct answer — only points out what to watch for.
-HINTER_PROMPT = """A model made a wrong function call.
+HINTER_PROMPT = """A model needs guidance on generating a function call.
 
 ## Available Tools
 {schema}
 
-## The Wrong Function Call
+## The Function Call with Issues
 Function: {tool_name}
 Arguments: {tool_args}
 
-## Evaluation of What Went Wrong
+## Evaluation of What Needs Attention
 {judge_output}
 
-Based on the evaluation above, in ONE sentence point out the specific issue
-with this function call and what to pay attention to when regenerating it.
+Based on the evaluation above, in ONE sentence point out what to pay attention to when generating the function call for this task.
 Reference the specific tool name or argument if relevant.
 Do NOT reference question numbers. Do NOT give the correct answer. Do NOT ask a question.
+Write as general guidance, not as a correction of a specific mistake.
 
 Hint:"""
 
@@ -122,6 +123,8 @@ Hint:"""
 # Decides whether that text response means the task is truly finished (Done)
 # or whether the model should have made a tool call but didn't (NotDone).
 COMPLETE_PROMPT = """You are reviewing a tool-use conversation turn.
+
+[CRITICAL] When in doubt, output Done. If the model has made reasonable progress or executed relevant tool calls, output Done.
 
 ## User Request for This Turn
 {user_request}
@@ -138,7 +141,7 @@ COMPLETE_PROMPT = """You are reviewing a tool-use conversation turn.
 Has the model fully completed the user's request for this turn, or does it still need to make function calls?
 
 <verdict>Done</verdict>    — the user's request has been fully completed
-<verdict>NotDone</verdict> — the model still needs to make function calls
+<verdict>NotDone</verdict> — the model should have made a function call but didn't
 
 <verdict>Done/NotDone</verdict>
 <hint>If NotDone, one sentence explaining what tool call is still needed. Empty if Done.</hint>
@@ -167,6 +170,7 @@ class QwenFCHintedHandler(QwenFCHandler):
         max_hint_retries: int = 3,
         max_judge_concurrency: int = 5,        # semaphore limit for concurrent judge API calls
         hint_log_path: Optional[str] = None,   # falls back to HINT_LOG_PATH env var
+        debug: Optional[bool] = None,          # falls back to HINT_DEBUG env var ("1"/"true")
         **kwargs,
     ):
         super().__init__(model_name, temperature, registry_name, is_fc_model, **kwargs)
@@ -176,6 +180,7 @@ class QwenFCHintedHandler(QwenFCHandler):
         judge_api   = judge_api   or os.environ["JUDGE_API"]
         judge_model = judge_model or os.environ["JUDGE_MODEL"]
         hint_log_path = hint_log_path or os.environ.get("HINT_LOG_PATH")
+        self.debug = debug if debug is not None else os.environ.get("HINT_DEBUG", "").lower() in ("1", "true")
         self.judge_api = judge_api
         self.judge_model = judge_model
         self.max_hint_retries = max_hint_retries
@@ -504,11 +509,17 @@ class QwenFCHintedHandler(QwenFCHandler):
             user_msgs = [m for m in current_turn_message if m.get("role") == "user"]
             user_request = user_msgs[0]["content"] if user_msgs else ""
 
+            if self.debug:
+                print("=" * 100)
+                print(f"ID: {test_entry_id.replace('multi_turn_', '')}, Turn: {turn_idx}")
+                print(f"  [User] {user_request}")
+
             count = 0
             while True:
-                print("-" * 100)
-                print(f"ID: {test_entry_id.replace('multi_turn_', '')}, "
-                      f"Turn: {turn_idx}, Step: {count}")
+                if self.debug:
+                    print("-" * 100)
+                    print(f"ID: {test_entry_id.replace('multi_turn_', '')}, "
+                          f"Turn: {turn_idx}, Step: {count}")
 
                 current_step_inference_log: list[dict] = []
                 current_turn_inference_log[f"step_{count}"] = current_step_inference_log
@@ -576,7 +587,10 @@ class QwenFCHintedHandler(QwenFCHandler):
                             current_state,
                             user_request,
                         )
-                        print(f"  [Complete] verdict={verdict}")
+                        if self.debug:
+                            print(f"  [Complete] verdict={verdict}")
+                            if complete_hint:
+                                print(f"  [Complete Hint] {complete_hint!r}")
                         if verdict == "Done" or count >= MAXIMUM_STEP_LIMIT:
                             turn_done = True
                             break
@@ -593,6 +607,10 @@ class QwenFCHintedHandler(QwenFCHandler):
                     # (3b) Valid function call — ask the judge whether it is correct.
                     # Skip judging on the last allowed retry to avoid an infinite loop
                     # if the judge keeps returning Bad.
+                    if self.debug:
+                        for _tc in fc_message.get("tool_calls") or []:
+                            _n, _a = (_tc["function"]["name"], _tc["function"]["arguments"]) if "function" in _tc else (_tc["name"], _tc["arguments"])
+                            print(f"  [FC] {_n}({json.dumps(_a) if isinstance(_a, dict) else _a})")
                     if hint_retry < self.max_hint_retries:
                         current_state = self._serialize_state(involved_instances)
                         verdict, judge_raw = self._run_judge(
@@ -601,11 +619,15 @@ class QwenFCHintedHandler(QwenFCHandler):
                             current_state,
                             inference_data["function"],
                         )
-                        print(f"  [Judge] verdict={verdict}, retry={hint_retry}")
+                        if self.debug:
+                            print(f"  [Judge] verdict={verdict}, retry={hint_retry}")
+                            print(f"  [Judge Raw] {judge_raw[:500]}")
                         if verdict == "Bad":
                             hint_text = self._run_hinter(
                                 judge_raw, fc_message, inference_data["function"]
                             )
+                            if self.debug:
+                                print(f"  [Hint] {hint_text!r}")
                             # Log the full correction event for offline analysis.
                             self._write_hint_log({
                                 "test_entry_id": test_entry_id,
