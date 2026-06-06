@@ -127,18 +127,31 @@ TEST_ENTRY = {
     "question": [[{"role": "user", "content": TASK}]],
     "initial_config": {},
     "involved_classes": [],
-    "function": [{
-        "name": "email.send",
-        "description": "Send an email to a recipient",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "to":   {"type": "string", "description": "Recipient email address"},
-                "body": {"type": "string", "description": "Email body text"},
+    "function": [
+        {
+            "name": "email.send",
+            "description": "Send an email to a recipient",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to":   {"type": "string", "description": "Recipient email address"},
+                    "body": {"type": "string", "description": "Email body text"},
+                },
+                "required": ["to", "body"],
             },
-            "required": ["to", "body"],
         },
-    }],
+        {
+            "name": "email.verify",
+            "description": "Verify that an email was delivered to the recipient",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {"type": "string", "description": "Recipient email address"},
+                },
+                "required": ["to"],
+            },
+        },
+    ],
 }
 
 def _fc(name, args):
@@ -165,10 +178,11 @@ def _txt(text):
         "input_token": 120, "output_token": 12, "reasoning_content": "",
     }
 
-GOOD_FC   = _fc("email.send", {"to": "bob@example.com", "body": "Meeting confirmed"})
-BAD_FC    = _fc("email.send", {"to": "bob@example.com", "body": ""})
-FINAL_TXT = _txt("I've sent the email to bob@example.com.")
-EARLY_TXT = _txt("Sure, I'll send that right away.")
+GOOD_FC    = _fc("email.send",   {"to": "bob@example.com", "body": "Meeting confirmed"})
+VERIFY_FC  = _fc("email.verify", {"to": "bob@example.com"})
+BAD_FC     = _fc("email.send",   {"to": "bob@example.com", "body": ""})
+FINAL_TXT  = _txt("I've sent the email to bob@example.com.")
+EARLY_TXT  = _txt("Sure, I'll send that right away.")
 
 # ── Runner helpers ────────────────────────────────────────────────────────────
 
@@ -321,10 +335,11 @@ BRANCHES: dict[str, list[dict]] = {
         },
         {
             "name": "fc_coach_instructs",
-            "description": "FC executed → coach gives instruction → injected → outer continues → final text accepted",
-            "model_seq": [GOOD_FC, FINAL_TXT],
+            "description": "FC1 executed → coach instructs 'verify delivery' → FC2 (verify) executed → coach silent → final text; context_snapshot at step_2 shows both FC1+result and FC2+result",
+            "model_seq": [GOOD_FC, VERIFY_FC, FINAL_TXT],
             "llm_seq": [
-                "Good. Now verify the email was delivered by checking the outbox.",
+                "Good. Now verify the email was delivered by calling email.verify.",
+                "SILENT",
                 "SILENT",
             ],
         },

@@ -96,20 +96,27 @@
     },
     {
       "branch": "fc_coach_instructs",
-      "description": "FC executed → coach gives instruction → injected → outer continues → final text accepted",
+      "description": "FC1 executed → coach instructs 'verify delivery' → FC2 (verify) executed → coach silent → final text; context_snapshot at step_2 shows both FC1+result and FC2+result",
       "model_outputs": [
         "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>",
+        "<tool_call>\n{\"name\": \"email.verify\", \"arguments\": {\"to\": \"bob@example.com\"}}\n</tool_call>",
         "I've sent the email to bob@example.com."
       ],
       "llm_responses": [
-        "Good. Now verify the email was delivered by checking the outbox.",
+        "Good. Now verify the email was delivered by calling email.verify.",
+        "SILENT",
         "SILENT"
       ],
       "llm_calls": [
         {
           "system_or_prompt": "You are supervising a tool-use agent completing a multi-step task.\n\nAfter each tool call and its observation, choose exactly one option:\n1. Stay silent — return an empty response or exactly SILENT.\n2. Return ONE short instruction for the agent's next step.\n\nIntervene only when it is likely to improv",
           "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
-          "response": "Good. Now verify the email was delivered by checking the outbox."
+          "response": "Good. Now verify the email was delivered by calling email.verify."
+        },
+        {
+          "system_or_prompt": "You are supervising a tool-use agent completing a multi-step task.\n\nAfter each tool call and its observation, choose exactly one option:\n1. Stay silent — return an empty response or exactly SILENT.\n2. Return ONE short instruction for the agent's next step.\n\nIntervene only when it is likely to improv",
+          "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
+          "response": "SILENT"
         },
         {
           "system_or_prompt": "You are supervising a tool-use agent completing a multi-step task.\n\nAfter each tool call and its observation, choose exactly one option:\n1. Stay silent — return an empty response or exactly SILENT.\n2. Return ONE short instruction for the agent's next step.\n\nIntervene only when it is likely to improv",
@@ -179,7 +186,63 @@
                 {
                   "role": "user",
                   "has_tool_calls": false,
-                  "content_preview": "Supervisor guidance for the next step only: Good. Now verify the email was delivered by checking the outbox."
+                  "content_preview": "Supervisor guidance for the next step only: Good. Now verify the email was delivered by calling email.verify."
+                }
+              ]
+            },
+            {
+              "role": "assistant",
+              "content": "<tool_call>\n{\"name\": \"email.verify\", \"arguments\": {\"to\": \"bob@example.com\"}}\n</tool_call>"
+            },
+            {
+              "role": "handler_log",
+              "content": "Successfully decoded model response.",
+              "model_response_decoded": [
+                {
+                  "email.verify": {
+                    "to": "bob@example.com"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Email sent successfully."
+            }
+          ],
+          "step_2": [
+            {
+              "role": "context_snapshot",
+              "messages": [
+                {
+                  "role": "user",
+                  "has_tool_calls": false,
+                  "content_preview": "Send an email to bob@example.com saying 'Meeting confirmed'"
+                },
+                {
+                  "role": "assistant",
+                  "has_tool_calls": true,
+                  "content_preview": ""
+                },
+                {
+                  "role": "tool",
+                  "has_tool_calls": false,
+                  "content_preview": "Email sent successfully."
+                },
+                {
+                  "role": "user",
+                  "has_tool_calls": false,
+                  "content_preview": "Supervisor guidance for the next step only: Good. Now verify the email was delivered by calling email.verify."
+                },
+                {
+                  "role": "assistant",
+                  "has_tool_calls": true,
+                  "content_preview": ""
+                },
+                {
+                  "role": "tool",
+                  "has_tool_calls": false,
+                  "content_preview": "Email sent successfully."
                 }
               ]
             },
