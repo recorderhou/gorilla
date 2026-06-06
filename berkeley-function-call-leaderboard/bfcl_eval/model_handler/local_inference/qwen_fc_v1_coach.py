@@ -223,6 +223,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
             history=self._fmt_messages(history),
         )
         raw = self._call_llm(COACH_SYSTEM, prompt)
+        raw = re.sub(r"^```\w*\s*\n?(.*?)\n?```\s*$", r"\1", raw.strip(), flags=re.DOTALL).strip()
         if raw.upper() in {"SILENT", "NONE", "NO INSTRUCTION", "NO-OP", "NOOP", ""}:
             return ""
         raw = re.sub(r"^(instruction|coach instruction)\s*:\s*", "", raw, flags=re.I).strip()

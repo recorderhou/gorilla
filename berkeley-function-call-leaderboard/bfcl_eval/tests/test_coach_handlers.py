@@ -34,33 +34,40 @@ def _make_stub(name: str) -> types.ModuleType:
     return m
 
 
-def _ensure_stub(dotted: str):
-    parts = dotted.split(".")
-    for i in range(1, len(parts) + 1):
-        pkg = ".".join(parts[:i])
-        if pkg not in sys.modules:
-            _make_stub(pkg)
-
-
+# Stub third-party packages that aren't installed in this environment.
 for _mod in [
     "openai",
     "openai.RateLimitError",
     "anthropic",
     "overrides",
+]:
+    if _mod not in sys.modules:
+        _make_stub(_mod)
+
+# Import the real bfcl_eval package hierarchy (all __init__.py are empty).
+# This must happen before stubbing any bfcl_eval.* leaf modules so Python
+# keeps local_inference as a real package and can find qwen_fc_v1_coach etc.
+import importlib
+for _real_pkg in [
     "bfcl_eval",
     "bfcl_eval.constants",
-    "bfcl_eval.constants.default_prompts",
-    "bfcl_eval.constants.executable_backend_config",
     "bfcl_eval.eval_checker",
     "bfcl_eval.eval_checker.multi_turn_eval",
-    "bfcl_eval.eval_checker.multi_turn_eval.multi_turn_utils",
     "bfcl_eval.model_handler",
     "bfcl_eval.model_handler.local_inference",
+]:
+    importlib.import_module(_real_pkg)
+
+# Stub leaf modules that have heavy/unavailable dependencies.
+for _mod in [
+    "bfcl_eval.constants.default_prompts",
+    "bfcl_eval.constants.executable_backend_config",
+    "bfcl_eval.eval_checker.multi_turn_eval.multi_turn_utils",
     "bfcl_eval.model_handler.local_inference.qwen_fc",
     "bfcl_eval.model_handler.utils",
     "bfcl_eval.utils",
 ]:
-    _ensure_stub(_mod)
+    _make_stub(_mod)
 
 # Populate stubs with the names the handlers import.
 sys.modules["openai"].OpenAI = MagicMock
@@ -189,11 +196,13 @@ class TestSerializeState:
         h = _make_v1()
 
         class FakeInst:
-            count = 5
-            name = "test"
-            _private = "hidden"
+            pass
+        inst = FakeInst()
+        inst.count = 5
+        inst.name = "test"
+        inst._private = "hidden"
 
-        state_str = h._serialize_state({"MyClass": FakeInst()})
+        state_str = h._serialize_state({"MyClass": inst})
         state = json.loads(state_str)
         assert "count" in state["MyClass"]
         assert "name" in state["MyClass"]

@@ -313,9 +313,10 @@ class QwenFCV2CoachHandler(QwenFCHandler):
             tool_args=tool_args,
         )
         raw = self._call_llm(COACH_SYSTEM, prompt)
+        raw = re.sub(r"^```\w*\s*\n?(.*?)\n?```\s*$", r"\1", raw.strip(), flags=re.DOTALL).strip()
         if raw.upper() in {"SILENT", "NONE", "NO INSTRUCTION", "NO-OP", "NOOP", ""}:
             return ""
-        return raw.strip()
+        return raw
 
     def _run_complete_check(
         self, messages: list, schema: list, current_state: str, user_request: str
