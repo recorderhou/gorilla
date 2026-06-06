@@ -60,6 +60,8 @@ from bfcl_eval.model_handler.local_inference.quick_testing_oss import (
 from bfcl_eval.model_handler.local_inference.qwen import QwenHandler
 from bfcl_eval.model_handler.local_inference.qwen_fc import QwenFCHandler
 from bfcl_eval.model_handler.local_inference.qwen_fc_hinted import QwenFCHintedHandler
+from bfcl_eval.model_handler.local_inference.qwen_fc_v1_coach import QwenFCV1CoachHandler
+from bfcl_eval.model_handler.local_inference.qwen_fc_v2_coach import QwenFCV2CoachHandler
 from bfcl_eval.model_handler.local_inference.nanbeige_fc import NanbeigeFCHandler
 from bfcl_eval.model_handler.local_inference.salesforce_llama import (
     SalesforceLlamaHandler,
@@ -916,6 +918,30 @@ api_inference_model_map = {
         org="Qwen",
         license="apache-2.0",
         model_handler=QwenFCHintedHandler,
+        input_price=None,
+        output_price=None,
+        is_fc_model=True,
+        underscore_to_dot=True,
+    ),
+    "qwen2.5-3b-v1coach-FC": ModelConfig(
+        model_name="Qwen/Qwen2.5-3B-Instruct",
+        display_name="Qwen2.5-3B-v1coach (FC)",
+        url="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct",
+        org="Qwen",
+        license="apache-2.0",
+        model_handler=QwenFCV1CoachHandler,
+        input_price=None,
+        output_price=None,
+        is_fc_model=True,
+        underscore_to_dot=True,
+    ),
+    "qwen2.5-3b-v2coach-FC": ModelConfig(
+        model_name="Qwen/Qwen2.5-3B-Instruct",
+        display_name="Qwen2.5-3B-v2coach (FC)",
+        url="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct",
+        org="Qwen",
+        license="apache-2.0",
+        model_handler=QwenFCV2CoachHandler,
         input_price=None,
         output_price=None,
         is_fc_model=True,
