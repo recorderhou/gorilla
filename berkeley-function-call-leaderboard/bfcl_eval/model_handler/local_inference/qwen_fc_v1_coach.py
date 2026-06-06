@@ -181,11 +181,16 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                 parts.append(f"User: {content}")
             elif role == "assistant" and m.get("tool_calls"):
                 for tc in m["tool_calls"]:
-                    fn = tc["function"] if "function" in tc else tc
-                    args = fn["arguments"]
+                    if "function" in tc:
+                        fn = tc["function"]
+                        name = fn.get("name", "unknown")
+                        args = fn.get("arguments", {})
+                    else:
+                        name = tc.get("name", "unknown")
+                        args = tc.get("arguments", {})
                     if isinstance(args, dict):
                         args = json.dumps(args)
-                    parts.append(f"Called: {fn['name']}({args})")
+                    parts.append(f"Called: {name}({args})")
             elif role == "tool":
                 parts.append(f"Tool result: {m.get('content', '')}")
         return "\n".join(parts) if parts else "(none)"
