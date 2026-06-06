@@ -344,6 +344,20 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                 current_step_inference_log: list[dict] = []
                 current_turn_inference_log[f"step_{count}"] = current_step_inference_log
 
+                # Snapshot of what the model sees at the start of this step.
+                # Confirms that tool calls and results from prior steps are in context.
+                current_step_inference_log.append({
+                    "role": "context_snapshot",
+                    "messages": [
+                        {
+                            "role": m.get("role"),
+                            "has_tool_calls": bool(m.get("tool_calls")),
+                            "content_preview": str(m.get("content") or "")[:120],
+                        }
+                        for m in inference_data["message"]
+                    ],
+                })
+
                 # ── Query ─────────────────────────────────────────────────────
                 api_response, latency = self._query_prompting(inference_data)
                 response_data   = self._parse_query_response_prompting(api_response)
