@@ -1,0 +1,233 @@
+{
+  "version": "v1_coach",
+  "task": "Send an email to bob@example.com saying 'Meeting confirmed'",
+  "branches": [
+    {
+      "branch": "fc_coach_silent",
+      "description": "FC executed → post-execution coach silent → outer loop continues → final text accepted",
+      "model_outputs": [
+        "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>",
+        "I've sent the email to bob@example.com."
+      ],
+      "llm_responses": [
+        "SILENT",
+        "SILENT"
+      ],
+      "llm_calls": [
+        {
+          "system_or_prompt": "You are supervising a tool-use agent completing a multi-step task.\n\nAfter each tool call and its observation, choose exactly one option:\n1. Stay silent — return an empty response or exactly SILENT.\n2. Return ONE short instruction for the agent's next step.\n\nIntervene only when it is likely to improv",
+          "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
+          "response": "SILENT"
+        },
+        {
+          "system_or_prompt": "You are supervising a tool-use agent completing a multi-step task.\n\nAfter each tool call and its observation, choose exactly one option:\n1. Stay silent — return an empty response or exactly SILENT.\n2. Return ONE short instruction for the agent's next step.\n\nIntervene only when it is likely to improv",
+          "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
+          "response": "SILENT"
+        }
+      ],
+      "inference_log": [
+        {
+          "begin_of_turn_query": [
+            {
+              "role": "user",
+              "content": "Send an email to bob@example.com saying 'Meeting confirmed'"
+            }
+          ],
+          "step_0": [
+            {
+              "role": "assistant",
+              "content": "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>"
+            },
+            {
+              "role": "handler_log",
+              "content": "Successfully decoded model response.",
+              "model_response_decoded": [
+                {
+                  "email.send": {
+                    "to": "bob@example.com",
+                    "body": "Meeting confirmed"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Email sent successfully."
+            }
+          ],
+          "step_1": [
+            {
+              "role": "handler_log",
+              "content": "Turn ended (text response, no further instruction)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "branch": "fc_coach_instructs",
+      "description": "FC executed → coach gives instruction → injected → outer continues → final text accepted",
+      "model_outputs": [
+        "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>",
+        "I've sent the email to bob@example.com."
+      ],
+      "llm_responses": [
+        "Good. Now verify the email was delivered by checking the outbox.",
+        "SILENT"
+      ],
+      "llm_calls": [
+        {
+          "system_or_prompt": "You are supervising a tool-use agent completing a multi-step task.\n\nAfter each tool call and its observation, choose exactly one option:\n1. Stay silent — return an empty response or exactly SILENT.\n2. Return ONE short instruction for the agent's next step.\n\nIntervene only when it is likely to improv",
+          "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
+          "response": "Good. Now verify the email was delivered by checking the outbox."
+        },
+        {
+          "system_or_prompt": "You are supervising a tool-use agent completing a multi-step task.\n\nAfter each tool call and its observation, choose exactly one option:\n1. Stay silent — return an empty response or exactly SILENT.\n2. Return ONE short instruction for the agent's next step.\n\nIntervene only when it is likely to improv",
+          "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
+          "response": "SILENT"
+        }
+      ],
+      "inference_log": [
+        {
+          "begin_of_turn_query": [
+            {
+              "role": "user",
+              "content": "Send an email to bob@example.com saying 'Meeting confirmed'"
+            }
+          ],
+          "step_0": [
+            {
+              "role": "assistant",
+              "content": "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>"
+            },
+            {
+              "role": "handler_log",
+              "content": "Successfully decoded model response.",
+              "model_response_decoded": [
+                {
+                  "email.send": {
+                    "to": "bob@example.com",
+                    "body": "Meeting confirmed"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Email sent successfully."
+            }
+          ],
+          "step_1": [
+            {
+              "role": "handler_log",
+              "content": "Turn ended (text response, no further instruction)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "branch": "no_fc_accepted",
+      "description": "Text response → after_attempted_final_answer coach silent → turn ends",
+      "model_outputs": [
+        "I've sent the email to bob@example.com."
+      ],
+      "llm_responses": [
+        "SILENT"
+      ],
+      "llm_calls": [
+        {
+          "system_or_prompt": "You are supervising a tool-use agent completing a multi-step task.\n\nAfter each tool call and its observation, choose exactly one option:\n1. Stay silent — return an empty response or exactly SILENT.\n2. Return ONE short instruction for the agent's next step.\n\nIntervene only when it is likely to improv",
+          "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
+          "response": "SILENT"
+        }
+      ],
+      "inference_log": [
+        {
+          "begin_of_turn_query": [
+            {
+              "role": "user",
+              "content": "Send an email to bob@example.com saying 'Meeting confirmed'"
+            }
+          ],
+          "step_0": [
+            {
+              "role": "handler_log",
+              "content": "Turn ended (text response, no further instruction)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "branch": "no_fc_redirected",
+      "description": "Premature text → coach instructs → FC executed → coach silent → final text accepted",
+      "model_outputs": [
+        "Sure, I'll send that right away.",
+        "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>",
+        "I've sent the email to bob@example.com."
+      ],
+      "llm_responses": [
+        "Call email.send to actually send the message.",
+        "SILENT",
+        "SILENT"
+      ],
+      "llm_calls": [
+        {
+          "system_or_prompt": "You are supervising a tool-use agent completing a multi-step task.\n\nAfter each tool call and its observation, choose exactly one option:\n1. Stay silent — return an empty response or exactly SILENT.\n2. Return ONE short instruction for the agent's next step.\n\nIntervene only when it is likely to improv",
+          "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
+          "response": "Call email.send to actually send the message."
+        },
+        {
+          "system_or_prompt": "You are supervising a tool-use agent completing a multi-step task.\n\nAfter each tool call and its observation, choose exactly one option:\n1. Stay silent — return an empty response or exactly SILENT.\n2. Return ONE short instruction for the agent's next step.\n\nIntervene only when it is likely to improv",
+          "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
+          "response": "SILENT"
+        },
+        {
+          "system_or_prompt": "You are supervising a tool-use agent completing a multi-step task.\n\nAfter each tool call and its observation, choose exactly one option:\n1. Stay silent — return an empty response or exactly SILENT.\n2. Return ONE short instruction for the agent's next step.\n\nIntervene only when it is likely to improv",
+          "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
+          "response": "SILENT"
+        }
+      ],
+      "inference_log": [
+        {
+          "begin_of_turn_query": [
+            {
+              "role": "user",
+              "content": "Send an email to bob@example.com saying 'Meeting confirmed'"
+            }
+          ],
+          "step_0": [],
+          "step_1": [
+            {
+              "role": "assistant",
+              "content": "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>"
+            },
+            {
+              "role": "handler_log",
+              "content": "Successfully decoded model response.",
+              "model_response_decoded": [
+                {
+                  "email.send": {
+                    "to": "bob@example.com",
+                    "body": "Meeting confirmed"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Email sent successfully."
+            }
+          ],
+          "step_2": [
+            {
+              "role": "handler_log",
+              "content": "Turn ended (text response, no further instruction)."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

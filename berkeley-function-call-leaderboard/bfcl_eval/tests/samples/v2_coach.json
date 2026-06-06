@@ -1,0 +1,239 @@
+{
+  "version": "v2_coach",
+  "task": "Send an email to bob@example.com saying 'Meeting confirmed'",
+  "branches": [
+    {
+      "branch": "fc_coach_silent",
+      "description": "Correct FC → pre-execution coach approves → execute; outer continues → final text Done",
+      "model_outputs": [
+        "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>",
+        "I've sent the email to bob@example.com."
+      ],
+      "llm_responses": [
+        "SILENT",
+        "<verdict>Done</verdict>\n<hint></hint>"
+      ],
+      "llm_calls": [
+        {
+          "system_or_prompt": "You are reviewing a tool-use agent's planned function call before it executes.\n\nChoose exactly one option:\n1. Return an empty response (or exactly SILENT) if the planned call is correct.\n2. Return ONE short hint if there is a clear issue.\n\nDo NOT reveal the correct answer or the correct function cal",
+          "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
+          "response": "SILENT"
+        },
+        {
+          "system_or_prompt": "",
+          "user_prompt_preview": "You are reviewing a tool-use conversation turn.\n\n[CRITICAL] When in doubt, output Done. If the model has made reasonable progress or executed relevant tool calls, output Done.\n\n## User Request for This Turn\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"na",
+          "response": "<verdict>Done</verdict>\n<hint></hint>"
+        }
+      ],
+      "inference_log": [
+        {
+          "begin_of_turn_query": [
+            {
+              "role": "user",
+              "content": "Send an email to bob@example.com saying 'Meeting confirmed'"
+            }
+          ],
+          "step_0": [
+            {
+              "role": "assistant",
+              "content": "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>"
+            },
+            {
+              "role": "handler_log",
+              "content": "Successfully decoded model response.",
+              "model_response_decoded": [
+                {
+                  "email.send": {
+                    "to": "bob@example.com",
+                    "body": "Meeting confirmed"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Email sent successfully."
+            }
+          ],
+          "step_1": [
+            {
+              "role": "handler_log",
+              "content": "Turn ended (Done verdict or retries exhausted)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "branch": "fc_coach_hint_retry",
+      "description": "Wrong FC → coach hints → retry correct FC → coach approves → execute; final text Done",
+      "model_outputs": [
+        "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"\"}}\n</tool_call>",
+        "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>",
+        "I've sent the email to bob@example.com."
+      ],
+      "llm_responses": [
+        "The body argument is empty; set it to 'Meeting confirmed'.",
+        "SILENT",
+        "<verdict>Done</verdict>\n<hint></hint>"
+      ],
+      "llm_calls": [
+        {
+          "system_or_prompt": "You are reviewing a tool-use agent's planned function call before it executes.\n\nChoose exactly one option:\n1. Return an empty response (or exactly SILENT) if the planned call is correct.\n2. Return ONE short hint if there is a clear issue.\n\nDo NOT reveal the correct answer or the correct function cal",
+          "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
+          "response": "The body argument is empty; set it to 'Meeting confirmed'."
+        },
+        {
+          "system_or_prompt": "You are reviewing a tool-use agent's planned function call before it executes.\n\nChoose exactly one option:\n1. Return an empty response (or exactly SILENT) if the planned call is correct.\n2. Return ONE short hint if there is a clear issue.\n\nDo NOT reveal the correct answer or the correct function cal",
+          "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
+          "response": "SILENT"
+        },
+        {
+          "system_or_prompt": "",
+          "user_prompt_preview": "You are reviewing a tool-use conversation turn.\n\n[CRITICAL] When in doubt, output Done. If the model has made reasonable progress or executed relevant tool calls, output Done.\n\n## User Request for This Turn\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"na",
+          "response": "<verdict>Done</verdict>\n<hint></hint>"
+        }
+      ],
+      "inference_log": [
+        {
+          "begin_of_turn_query": [
+            {
+              "role": "user",
+              "content": "Send an email to bob@example.com saying 'Meeting confirmed'"
+            }
+          ],
+          "step_0": [
+            {
+              "role": "assistant",
+              "content": "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>"
+            },
+            {
+              "role": "handler_log",
+              "content": "Successfully decoded model response.",
+              "model_response_decoded": [
+                {
+                  "email.send": {
+                    "to": "bob@example.com",
+                    "body": "Meeting confirmed"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Email sent successfully."
+            }
+          ],
+          "step_1": [
+            {
+              "role": "handler_log",
+              "content": "Turn ended (Done verdict or retries exhausted)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "branch": "no_fc_done",
+      "description": "Text response → COMPLETE_PROMPT Done → turn ends immediately",
+      "model_outputs": [
+        "I've sent the email to bob@example.com."
+      ],
+      "llm_responses": [
+        "<verdict>Done</verdict>\n<hint></hint>"
+      ],
+      "llm_calls": [
+        {
+          "system_or_prompt": "",
+          "user_prompt_preview": "You are reviewing a tool-use conversation turn.\n\n[CRITICAL] When in doubt, output Done. If the model has made reasonable progress or executed relevant tool calls, output Done.\n\n## User Request for This Turn\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"na",
+          "response": "<verdict>Done</verdict>\n<hint></hint>"
+        }
+      ],
+      "inference_log": [
+        {
+          "begin_of_turn_query": [
+            {
+              "role": "user",
+              "content": "Send an email to bob@example.com saying 'Meeting confirmed'"
+            }
+          ],
+          "step_0": [
+            {
+              "role": "handler_log",
+              "content": "Turn ended (Done verdict or retries exhausted)."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "branch": "no_fc_not_done_retry",
+      "description": "Premature text → NotDone hint → retry FC → coach approves → execute; final text Done",
+      "model_outputs": [
+        "Sure, I'll send that right away.",
+        "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>",
+        "I've sent the email to bob@example.com."
+      ],
+      "llm_responses": [
+        "<verdict>NotDone</verdict>\n<hint>Call email.send to send the message.</hint>",
+        "SILENT",
+        "<verdict>Done</verdict>\n<hint></hint>"
+      ],
+      "llm_calls": [
+        {
+          "system_or_prompt": "",
+          "user_prompt_preview": "You are reviewing a tool-use conversation turn.\n\n[CRITICAL] When in doubt, output Done. If the model has made reasonable progress or executed relevant tool calls, output Done.\n\n## User Request for This Turn\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"na",
+          "response": "<verdict>NotDone</verdict>\n<hint>Call email.send to send the message.</hint>"
+        },
+        {
+          "system_or_prompt": "You are reviewing a tool-use agent's planned function call before it executes.\n\nChoose exactly one option:\n1. Return an empty response (or exactly SILENT) if the planned call is correct.\n2. Return ONE short hint if there is a clear issue.\n\nDo NOT reveal the correct answer or the correct function cal",
+          "user_prompt_preview": "## Task\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"name\": \"email.send\",\n    \"description\": \"Send an email to a recipient\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"to\": {\n          \"type\": \"string\",\n          \"descript",
+          "response": "SILENT"
+        },
+        {
+          "system_or_prompt": "",
+          "user_prompt_preview": "You are reviewing a tool-use conversation turn.\n\n[CRITICAL] When in doubt, output Done. If the model has made reasonable progress or executed relevant tool calls, output Done.\n\n## User Request for This Turn\nSend an email to bob@example.com saying 'Meeting confirmed'\n\n## Available Tools\n[\n  {\n    \"na",
+          "response": "<verdict>Done</verdict>\n<hint></hint>"
+        }
+      ],
+      "inference_log": [
+        {
+          "begin_of_turn_query": [
+            {
+              "role": "user",
+              "content": "Send an email to bob@example.com saying 'Meeting confirmed'"
+            }
+          ],
+          "step_0": [
+            {
+              "role": "assistant",
+              "content": "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>"
+            },
+            {
+              "role": "handler_log",
+              "content": "Successfully decoded model response.",
+              "model_response_decoded": [
+                {
+                  "email.send": {
+                    "to": "bob@example.com",
+                    "body": "Meeting confirmed"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Email sent successfully."
+            }
+          ],
+          "step_1": [
+            {
+              "role": "handler_log",
+              "content": "Turn ended (Done verdict or retries exhausted)."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
