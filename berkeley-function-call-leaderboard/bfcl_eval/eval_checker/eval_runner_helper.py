@@ -298,7 +298,9 @@ def generate_leaderboard_csv(leaderboard_table, output_path):
     data_combined = []
     for model_name, value in leaderboard_table.items():
         model_name_escaped = model_name.replace("_", "/")
-        model_config = MODEL_CONFIG_MAPPING[model_name_escaped]
+        model_config = MODEL_CONFIG_MAPPING.get(model_name_escaped)
+        if model_config is None:
+            continue
 
         cost_data = value.get("cost", {"input_data": [], "output_data": []})
         latency_data = value.get("latency", {"data": []})
