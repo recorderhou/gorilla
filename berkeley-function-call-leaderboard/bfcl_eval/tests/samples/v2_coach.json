@@ -48,7 +48,9 @@
                     "body": "Meeting confirmed"
                   }
                 }
-              ]
+              ],
+              "hinted_step": false,
+              "final_verdict": "Good"
             },
             {
               "role": "tool",
@@ -58,7 +60,9 @@
           "step_1": [
             {
               "role": "handler_log",
-              "content": "Turn ended (Done verdict or retries exhausted)."
+              "content": "Turn ended (Done verdict or retries exhausted).",
+              "hinted_step": false,
+              "final_verdict": "Done"
             }
           ]
         }
@@ -117,7 +121,9 @@
                     "body": "Meeting confirmed"
                   }
                 }
-              ]
+              ],
+              "hinted_step": true,
+              "final_verdict": "Good"
             },
             {
               "role": "tool",
@@ -127,7 +133,9 @@
           "step_1": [
             {
               "role": "handler_log",
-              "content": "Turn ended (Done verdict or retries exhausted)."
+              "content": "Turn ended (Done verdict or retries exhausted).",
+              "hinted_step": false,
+              "final_verdict": "Done"
             }
           ]
         }
@@ -160,7 +168,9 @@
           "step_0": [
             {
               "role": "handler_log",
-              "content": "Turn ended (Done verdict or retries exhausted)."
+              "content": "Turn ended (Done verdict or retries exhausted).",
+              "hinted_step": false,
+              "final_verdict": "Done"
             }
           ]
         }
@@ -219,7 +229,9 @@
                     "body": "Meeting confirmed"
                   }
                 }
-              ]
+              ],
+              "hinted_step": true,
+              "final_verdict": "Good"
             },
             {
               "role": "tool",
@@ -229,7 +241,9 @@
           "step_1": [
             {
               "role": "handler_log",
-              "content": "Turn ended (Done verdict or retries exhausted)."
+              "content": "Turn ended (Done verdict or retries exhausted).",
+              "hinted_step": false,
+              "final_verdict": "Done"
             }
           ]
         }

@@ -74,7 +74,7 @@ COACH_PROMPT = """## Task
 
 ## Conversation so far
 {history}
-
+{budget_info}
 Return an empty response to stay silent, or one short instruction for the agent's next step."""
 
 
@@ -215,17 +215,23 @@ class QwenFCV1CoachHandler(QwenFCHandler):
         schema: list,
         user_request: str,
         phase: str,
+        instructions_used: int = 0,
     ) -> str:
         """
         Ask the coach whether to intervene.  Returns "" to stay silent, or a
         one-sentence instruction for the agent's next step.
         """
+        budget_info = (
+            f"Instruction budget: {instructions_used}/{self.max_coach_instructions} already used for this task.\n"
+            if self.max_coach_instructions > 0 else ""
+        )
         prompt = COACH_PROMPT.format(
             user_request=user_request,
             schema=json.dumps(schema, indent=2),
             current_state=current_state,
             phase=phase,
             history=self._fmt_messages(history),
+            budget_info=budget_info,
         )
         raw = self._call_llm(COACH_SYSTEM, prompt)
         raw = re.sub(r"^```\w*\s*\n?(.*?)\n?```\s*$", r"\1", raw.strip(), flags=re.DOTALL).strip()
@@ -298,6 +304,8 @@ class QwenFCV1CoachHandler(QwenFCHandler):
 
         inference_data: dict = self._pre_query_processing_prompting(test_entry)
 
+        coach_instructions_total = 0  # per-task, never reset between turns
+
         for turn_idx, current_turn_message in enumerate(test_entry["question"]):
             if str(turn_idx) in holdout_function:
                 assert len(current_turn_message) == 0
@@ -333,7 +341,6 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                 print(f"  [User] {user_request}")
 
             count = 0
-            coach_instructions_this_turn = 0
 
             while True:
                 if self.debug:
@@ -344,19 +351,22 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                 current_step_inference_log: list[dict] = []
                 current_turn_inference_log[f"step_{count}"] = current_step_inference_log
 
-                # Snapshot of what the model sees at the start of this step.
-                # Confirms that tool calls and results from prior steps are in context.
-                current_step_inference_log.append({
-                    "role": "context_snapshot",
-                    "messages": [
-                        {
-                            "role": m.get("role"),
-                            "has_tool_calls": bool(m.get("tool_calls")),
-                            "content_preview": str(m.get("content") or "")[:120],
-                        }
-                        for m in inference_data["message"]
-                    ],
-                })
+                # True if the previous step's post-execution coach injected a guidance message.
+                coached_step = (
+                    bool(inference_data["message"])
+                    and inference_data["message"][-1].get("role") == "user"
+                    and str(inference_data["message"][-1].get("content") or "").startswith(
+                        "Supervisor guidance for the next step only:"
+                    )
+                )
+
+                # Log guidance as a user message so the inference log directly mirrors
+                # the model's context (same append-only structure as Agent Sampler).
+                if coached_step:
+                    current_step_inference_log.append({
+                        "role": "user",
+                        "content": inference_data["message"][-1]["content"],
+                    })
 
                 # ── Query ─────────────────────────────────────────────────────
                 api_response, latency = self._query_prompting(inference_data)
@@ -386,7 +396,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
 
                     can_intervene = (
                         self.max_coach_instructions <= 0
-                        or coach_instructions_this_turn < self.max_coach_instructions
+                        or coach_instructions_total < self.max_coach_instructions
                     ) and count < MAXIMUM_STEP_LIMIT
 
                     if can_intervene:
@@ -397,6 +407,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                             inference_data["function"],
                             user_request,
                             phase="after_attempted_final_answer",
+                            instructions_used=coach_instructions_total,
                         )
                         self._write_hint_log({
                             "type":          "v1_coach_final",
@@ -410,7 +421,13 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                         if self.debug:
                             print(f"  [Coach/Final] {instruction!r}")
                         if instruction:
-                            coach_instructions_this_turn += 1
+                            coach_instructions_total += 1
+                            current_step_inference_log.append({
+                                "role": "handler_log",
+                                "content": "Coach intervened on text response.",
+                                "hinted_step": coached_step,
+                                "final_verdict": "coached",
+                            })
                             inference_data["message"].append({
                                 "role": "user",
                                 "content": f"Supervisor guidance for the next step only: {instruction}",
@@ -421,6 +438,8 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                     current_step_inference_log.append({
                         "role": "handler_log",
                         "content": "Turn ended (text response, no further instruction).",
+                        "hinted_step": coached_step,
+                        "final_verdict": "silent",
                     })
                     break
 
@@ -472,7 +491,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                 # ── Post-execution coach ──────────────────────────────────────
                 can_intervene = (
                     self.max_coach_instructions <= 0
-                    or coach_instructions_this_turn < self.max_coach_instructions
+                    or coach_instructions_total < self.max_coach_instructions
                 ) and count < MAXIMUM_STEP_LIMIT - 1
 
                 if can_intervene:
@@ -483,6 +502,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                         inference_data["function"],
                         user_request,
                         phase="after_tool_observation",
+                        instructions_used=coach_instructions_total,
                     )
                     self._write_hint_log({
                         "type":          "v1_coach_tool",
@@ -495,11 +515,17 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                     if self.debug:
                         print(f"  [Coach/Tool] {instruction!r}")
                     if instruction:
-                        coach_instructions_this_turn += 1
+                        coach_instructions_total += 1
                         inference_data["message"].append({
                             "role": "user",
                             "content": f"Supervisor guidance for the next step only: {instruction}",
                         })
+                    current_step_inference_log.append({
+                        "role": "handler_log",
+                        "content": "Post-execution coach.",
+                        "hinted_step": coached_step,
+                        "final_verdict": "coached" if instruction else "silent",
+                    })
 
                 count += 1
                 if count > MAXIMUM_STEP_LIMIT:
@@ -509,16 +535,6 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                         "content": f"Forced quit after {MAXIMUM_STEP_LIMIT} steps.",
                     })
                     break
-
-            # Strip coach instructions from the committed message history so the
-            # training log is clean (matches base handler output format).
-            inference_data["message"] = [
-                m for m in inference_data["message"]
-                if not (
-                    m.get("role") == "user"
-                    and str(m.get("content") or "").startswith("Supervisor guidance for the next step only:")
-                )
-            ]
 
             all_model_response.append(current_turn_response)
             all_reasoning_content.append(current_turn_reasoning_content)

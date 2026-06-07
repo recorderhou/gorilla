@@ -588,6 +588,7 @@ class QwenFCHintedHandler(QwenFCHandler):
                 turn_done            = False
                 latest_hint: Optional[str] = None   # most recent hint from the hinter LLM
                 step_hint_history:   list[dict] = []  # all {fc_message, hint} from this step's retries
+                step_final_verdict:  Optional[str] = None  # last judge/complete_check verdict
 
                 while hint_retry <= self.max_hint_retries:
 
@@ -633,6 +634,7 @@ class QwenFCHintedHandler(QwenFCHandler):
                             current_state,
                             user_request,
                         )
+                        step_final_verdict = verdict
                         self._write_hint_log({
                             "type":          "complete_check",
                             "test_entry_id": test_entry_id,
@@ -677,6 +679,7 @@ class QwenFCHintedHandler(QwenFCHandler):
                             inference_data["function"],
                             hint_history=step_hint_history,
                         )
+                        step_final_verdict = verdict
                         if self.debug:
                             print(f"  [Judge] verdict={verdict}, retry={hint_retry}")
                             print(f"  [Judge Raw] {judge_raw[:500]}")
@@ -721,6 +724,8 @@ class QwenFCHintedHandler(QwenFCHandler):
                     current_step_inference_log.append({
                         "role": "handler_log",
                         "content": "Turn ended (Done verdict or retries exhausted).",
+                        "hinted_step": hint_retry > 0,
+                        "final_verdict": step_final_verdict,
                     })
                     break
 
@@ -754,6 +759,8 @@ class QwenFCHintedHandler(QwenFCHandler):
                     "role": "handler_log",
                     "content": "Successfully decoded model response.",
                     "model_response_decoded": decoded,
+                    "hinted_step": hint_retry > 0,
+                    "final_verdict": step_final_verdict,
                 })
 
                 # Execute the function calls against the backend instances and

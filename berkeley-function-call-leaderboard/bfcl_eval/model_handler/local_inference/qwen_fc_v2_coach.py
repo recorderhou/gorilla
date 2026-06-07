@@ -436,6 +436,7 @@ class QwenFCV2CoachHandler(QwenFCHandler):
                 turn_done            = False
                 latest_hint: Optional[str] = None
                 step_hint_history:   list[dict] = []
+                step_final_verdict:  Optional[str] = None
 
                 while hint_retry <= self.max_hint_retries:
 
@@ -472,6 +473,7 @@ class QwenFCV2CoachHandler(QwenFCHandler):
                             current_state,
                             user_request,
                         )
+                        step_final_verdict = verdict
                         self._write_hint_log({
                             "type":          "complete_check",
                             "test_entry_id": test_entry_id,
@@ -516,6 +518,7 @@ class QwenFCV2CoachHandler(QwenFCHandler):
                             user_request,
                             hint_history=step_hint_history,
                         )
+                        step_final_verdict = "Bad" if hint_text else "Good"
                         if self.debug:
                             if hint_text:
                                 print(f"  [Coach] hint={hint_text!r}, retry={hint_retry}")
@@ -549,6 +552,8 @@ class QwenFCV2CoachHandler(QwenFCHandler):
                     current_step_inference_log.append({
                         "role": "handler_log",
                         "content": "Turn ended (Done verdict or retries exhausted).",
+                        "hinted_step": hint_retry > 0,
+                        "final_verdict": step_final_verdict,
                     })
                     break
 
@@ -577,6 +582,8 @@ class QwenFCV2CoachHandler(QwenFCHandler):
                     "role": "handler_log",
                     "content": "Successfully decoded model response.",
                     "model_response_decoded": decoded,
+                    "hinted_step": hint_retry > 0,
+                    "final_verdict": step_final_verdict,
                 })
 
                 execution_results, involved_instances = execute_multi_turn_func_call(

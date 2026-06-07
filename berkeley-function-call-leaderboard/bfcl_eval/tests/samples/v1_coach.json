@@ -35,16 +35,6 @@
           ],
           "step_0": [
             {
-              "role": "context_snapshot",
-              "messages": [
-                {
-                  "role": "user",
-                  "has_tool_calls": false,
-                  "content_preview": "Send an email to bob@example.com saying 'Meeting confirmed'"
-                }
-              ]
-            },
-            {
               "role": "assistant",
               "content": "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>"
             },
@@ -63,32 +53,20 @@
             {
               "role": "tool",
               "content": "Email sent successfully."
+            },
+            {
+              "role": "handler_log",
+              "content": "Post-execution coach.",
+              "hinted_step": false,
+              "final_verdict": "silent"
             }
           ],
           "step_1": [
             {
-              "role": "context_snapshot",
-              "messages": [
-                {
-                  "role": "user",
-                  "has_tool_calls": false,
-                  "content_preview": "Send an email to bob@example.com saying 'Meeting confirmed'"
-                },
-                {
-                  "role": "assistant",
-                  "has_tool_calls": true,
-                  "content_preview": ""
-                },
-                {
-                  "role": "tool",
-                  "has_tool_calls": false,
-                  "content_preview": "Email sent successfully."
-                }
-              ]
-            },
-            {
               "role": "handler_log",
-              "content": "Turn ended (text response, no further instruction)."
+              "content": "Turn ended (text response, no further instruction).",
+              "hinted_step": false,
+              "final_verdict": "silent"
             }
           ]
         }
@@ -134,16 +112,6 @@
           ],
           "step_0": [
             {
-              "role": "context_snapshot",
-              "messages": [
-                {
-                  "role": "user",
-                  "has_tool_calls": false,
-                  "content_preview": "Send an email to bob@example.com saying 'Meeting confirmed'"
-                }
-              ]
-            },
-            {
               "role": "assistant",
               "content": "<tool_call>\n{\"name\": \"email.send\", \"arguments\": {\"to\": \"bob@example.com\", \"body\": \"Meeting confirmed\"}}\n</tool_call>"
             },
@@ -162,33 +130,18 @@
             {
               "role": "tool",
               "content": "Email sent successfully."
+            },
+            {
+              "role": "handler_log",
+              "content": "Post-execution coach.",
+              "hinted_step": false,
+              "final_verdict": "coached"
             }
           ],
           "step_1": [
             {
-              "role": "context_snapshot",
-              "messages": [
-                {
-                  "role": "user",
-                  "has_tool_calls": false,
-                  "content_preview": "Send an email to bob@example.com saying 'Meeting confirmed'"
-                },
-                {
-                  "role": "assistant",
-                  "has_tool_calls": true,
-                  "content_preview": ""
-                },
-                {
-                  "role": "tool",
-                  "has_tool_calls": false,
-                  "content_preview": "Email sent successfully."
-                },
-                {
-                  "role": "user",
-                  "has_tool_calls": false,
-                  "content_preview": "Supervisor guidance for the next step only: Good. Now verify the email was delivered by calling email.verify."
-                }
-              ]
+              "role": "user",
+              "content": "Supervisor guidance for the next step only: Good. Now verify the email was delivered by calling email.verify."
             },
             {
               "role": "assistant",
@@ -208,47 +161,20 @@
             {
               "role": "tool",
               "content": "Email sent successfully."
+            },
+            {
+              "role": "handler_log",
+              "content": "Post-execution coach.",
+              "hinted_step": true,
+              "final_verdict": "silent"
             }
           ],
           "step_2": [
             {
-              "role": "context_snapshot",
-              "messages": [
-                {
-                  "role": "user",
-                  "has_tool_calls": false,
-                  "content_preview": "Send an email to bob@example.com saying 'Meeting confirmed'"
-                },
-                {
-                  "role": "assistant",
-                  "has_tool_calls": true,
-                  "content_preview": ""
-                },
-                {
-                  "role": "tool",
-                  "has_tool_calls": false,
-                  "content_preview": "Email sent successfully."
-                },
-                {
-                  "role": "user",
-                  "has_tool_calls": false,
-                  "content_preview": "Supervisor guidance for the next step only: Good. Now verify the email was delivered by calling email.verify."
-                },
-                {
-                  "role": "assistant",
-                  "has_tool_calls": true,
-                  "content_preview": ""
-                },
-                {
-                  "role": "tool",
-                  "has_tool_calls": false,
-                  "content_preview": "Email sent successfully."
-                }
-              ]
-            },
-            {
               "role": "handler_log",
-              "content": "Turn ended (text response, no further instruction)."
+              "content": "Turn ended (text response, no further instruction).",
+              "hinted_step": false,
+              "final_verdict": "silent"
             }
           ]
         }
@@ -280,18 +206,10 @@
           ],
           "step_0": [
             {
-              "role": "context_snapshot",
-              "messages": [
-                {
-                  "role": "user",
-                  "has_tool_calls": false,
-                  "content_preview": "Send an email to bob@example.com saying 'Meeting confirmed'"
-                }
-              ]
-            },
-            {
               "role": "handler_log",
-              "content": "Turn ended (text response, no further instruction)."
+              "content": "Turn ended (text response, no further instruction).",
+              "hinted_step": false,
+              "final_verdict": "silent"
             }
           ]
         }
@@ -337,36 +255,16 @@
           ],
           "step_0": [
             {
-              "role": "context_snapshot",
-              "messages": [
-                {
-                  "role": "user",
-                  "has_tool_calls": false,
-                  "content_preview": "Send an email to bob@example.com saying 'Meeting confirmed'"
-                }
-              ]
+              "role": "handler_log",
+              "content": "Coach intervened on text response.",
+              "hinted_step": false,
+              "final_verdict": "coached"
             }
           ],
           "step_1": [
             {
-              "role": "context_snapshot",
-              "messages": [
-                {
-                  "role": "user",
-                  "has_tool_calls": false,
-                  "content_preview": "Send an email to bob@example.com saying 'Meeting confirmed'"
-                },
-                {
-                  "role": "assistant",
-                  "has_tool_calls": false,
-                  "content_preview": "Sure, I'll send that right away."
-                },
-                {
-                  "role": "user",
-                  "has_tool_calls": false,
-                  "content_preview": "Supervisor guidance for the next step only: Call email.send to actually send the message."
-                }
-              ]
+              "role": "user",
+              "content": "Supervisor guidance for the next step only: Call email.send to actually send the message."
             },
             {
               "role": "assistant",
@@ -387,42 +285,20 @@
             {
               "role": "tool",
               "content": "Email sent successfully."
+            },
+            {
+              "role": "handler_log",
+              "content": "Post-execution coach.",
+              "hinted_step": true,
+              "final_verdict": "silent"
             }
           ],
           "step_2": [
             {
-              "role": "context_snapshot",
-              "messages": [
-                {
-                  "role": "user",
-                  "has_tool_calls": false,
-                  "content_preview": "Send an email to bob@example.com saying 'Meeting confirmed'"
-                },
-                {
-                  "role": "assistant",
-                  "has_tool_calls": false,
-                  "content_preview": "Sure, I'll send that right away."
-                },
-                {
-                  "role": "user",
-                  "has_tool_calls": false,
-                  "content_preview": "Supervisor guidance for the next step only: Call email.send to actually send the message."
-                },
-                {
-                  "role": "assistant",
-                  "has_tool_calls": true,
-                  "content_preview": ""
-                },
-                {
-                  "role": "tool",
-                  "has_tool_calls": false,
-                  "content_preview": "Email sent successfully."
-                }
-              ]
-            },
-            {
               "role": "handler_log",
-              "content": "Turn ended (text response, no further instruction)."
+              "content": "Turn ended (text response, no further instruction).",
+              "hinted_step": false,
+              "final_verdict": "silent"
             }
           ]
         }
