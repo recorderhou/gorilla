@@ -159,8 +159,9 @@ class QwenFCV3CoachHandler(QwenFCHandler):
 
     @retry_with_backoff(error_type=RateLimitError)
     def _call_openai(self, system: str, prompt: str) -> str:
-        is_o = self.judge_model.startswith("o")
-        kwargs = {"max_completion_tokens": 300} if is_o else {"max_tokens": 300, "temperature": 0}
+        kwargs = {"max_completion_tokens": 300}
+        if not self.judge_model.startswith("o"):
+            kwargs["temperature"] = 0
         resp = self._judge_client.chat.completions.create(
             model=self.judge_model,
             messages=[
