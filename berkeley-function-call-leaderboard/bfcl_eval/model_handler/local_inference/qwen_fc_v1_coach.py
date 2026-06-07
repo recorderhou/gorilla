@@ -136,7 +136,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
     @retry_with_backoff(error_type=RateLimitError)
     def _call_openai(self, system: str, prompt: str) -> str:
         kwargs = {"max_completion_tokens": 200}
-        if not self.judge_model.startswith("o"):
+        if not (self.judge_model.startswith("o") or self.judge_model.startswith("gpt-5")):
             kwargs["temperature"] = 0
         resp = self._judge_client.chat.completions.create(
             model=self.judge_model,
