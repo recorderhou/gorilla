@@ -249,12 +249,11 @@ class QwenFCHintedHandler(QwenFCHandler):
 
     def _serialize_state(self, involved_instances: dict) -> str:
         """
-        Snapshot the public attributes of all active backend instances.
-        Private attributes (prefixed with _) are skipped — they are internal
-        implementation details not relevant to the judge's evaluation.
+        Snapshot the attributes of all active backend instances.
+        Only _api_description is excluded (boilerplate string, not useful to the judge).
         """
         state = {
-            name: {k: v for k, v in vars(inst).items() if not k.startswith("_")}
+            name: {k: v for k, v in vars(inst).items() if k != "_api_description"}
             for name, inst in involved_instances.items()
         }
         return json.dumps(state, indent=2, default=str)
