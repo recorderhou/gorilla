@@ -164,10 +164,29 @@ class QwenFCV1CoachHandler(QwenFCHandler):
             return self._call_anthropic(system, prompt)
 
     def _serialize_state(self, involved_instances: dict) -> str:
-        state = {
-            name: {k: v for k, v in vars(inst).items() if k != "_api_description"}
-            for name, inst in involved_instances.items()
-        }
+        try:
+            from bfcl_eval.eval_checker.multi_turn_eval.func_source_code.gorilla_file_system import Directory as _Directory
+        except ImportError:
+            _Directory = None
+
+        def _dir_path(d):
+            parts = []
+            while d is not None:
+                parts.append(d.name)
+                d = d.parent
+            return "/".join(reversed(parts))
+
+        state = {}
+        for name, inst in involved_instances.items():
+            attrs = {}
+            for k, v in vars(inst).items():
+                if k == "_api_description":
+                    continue
+                if k == "_current_dir" and _Directory is not None and isinstance(v, _Directory):
+                    attrs[k] = _dir_path(v)
+                else:
+                    attrs[k] = v
+            state[name] = attrs
         return json.dumps(state, indent=2, default=str)
 
     def _fmt_messages(self, msgs: list) -> str:
@@ -436,6 +455,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                             count += 1
                             continue
 
+                    current_step_inference_log.append(fc_message)
                     current_step_inference_log.append({
                         "role": "handler_log",
                         "content": "Turn ended (text response, no further instruction).",

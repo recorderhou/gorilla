@@ -65,6 +65,9 @@ COACH_PROMPT = """## Task
 ## Conversation History (committed turns)
 {history}
 
+## Previous Step Result
+{prev_step_result}
+
 ## Previous Hints This Step
 {previous_hints}
 
@@ -188,10 +191,29 @@ class QwenFCV3CoachHandler(QwenFCHandler):
             return self._call_anthropic(system, prompt)
 
     def _serialize_state(self, involved_instances: dict) -> str:
-        state = {
-            name: {k: v for k, v in vars(inst).items() if k != "_api_description"}
-            for name, inst in involved_instances.items()
-        }
+        try:
+            from bfcl_eval.eval_checker.multi_turn_eval.func_source_code.gorilla_file_system import Directory as _Directory
+        except ImportError:
+            _Directory = None
+
+        def _dir_path(d):
+            parts = []
+            while d is not None:
+                parts.append(d.name)
+                d = d.parent
+            return "/".join(reversed(parts))
+
+        state = {}
+        for name, inst in involved_instances.items():
+            attrs = {}
+            for k, v in vars(inst).items():
+                if k == "_api_description":
+                    continue
+                if k == "_current_dir" and _Directory is not None and isinstance(v, _Directory):
+                    attrs[k] = _dir_path(v)
+                else:
+                    attrs[k] = v
+            state[name] = attrs
         return json.dumps(state, indent=2, default=str)
 
     def _fmt_messages(self, msgs: list) -> str:
@@ -249,6 +271,27 @@ class QwenFCV3CoachHandler(QwenFCHandler):
         if self._hint_log_queue is not None:
             self._hint_log_queue.put(entry)
 
+    def _fmt_prev_step_result(self, history: list, step_start_idx: int) -> str:
+        """Extract the last committed FC + tool results from just before step_start_idx."""
+        msgs = history[:step_start_idx]
+        for i in range(len(msgs) - 1, -1, -1):
+            if msgs[i].get("role") == "assistant" and msgs[i].get("tool_calls"):
+                fc = msgs[i]
+                results = msgs[i + 1:]
+                parts = []
+                for tc in fc.get("tool_calls") or []:
+                    fn = tc.get("function", tc)
+                    name = fn.get("name", "?")
+                    args = fn.get("arguments", {})
+                    parts.append(f"{name}({json.dumps(args) if isinstance(args, dict) else args})")
+                fc_str = ", ".join(parts)
+                result_strs = [
+                    m.get("content", "") for m in results if m.get("role") == "tool"
+                ]
+                result_str = " | ".join(result_strs) if result_strs else "(no result)"
+                return f"Called: {fc_str}\nResult: {result_str}"
+        return "(none — this is the first step)"
+
     def _run_coach(
         self,
         fc_message: dict,
@@ -257,6 +300,7 @@ class QwenFCV3CoachHandler(QwenFCHandler):
         schema: list,
         user_request: str,
         hint_history: Optional[list[dict]] = None,
+        prev_step_result: str = "(none — this is the first step)",
     ) -> str:
         """
         Pre-execution combined judge + hinter.  Returns "" to approve the FC,
@@ -301,6 +345,7 @@ class QwenFCV3CoachHandler(QwenFCHandler):
             user_request=user_request,
             schema=json.dumps(schema, indent=2),
             history=self._fmt_messages(history),
+            prev_step_result=prev_step_result,
             previous_hints=previous_hints,
             current_state=current_state,
             tool_name=tool_name,
@@ -427,6 +472,7 @@ class QwenFCV3CoachHandler(QwenFCHandler):
 
                 # ── Hint retry sub-loop ───────────────────────────────────────
                 step_start_idx       = len(inference_data["message"])
+                prev_step_result     = self._fmt_prev_step_result(inference_data["message"], step_start_idx)
                 hint_retry           = 0
                 final_response_data: Optional[dict] = None
                 turn_done            = False
@@ -515,6 +561,7 @@ class QwenFCV3CoachHandler(QwenFCHandler):
                             inference_data["function"],
                             user_request,
                             hint_history=step_hint_history,
+                            prev_step_result=prev_step_result,
                         )
                         step_final_verdict = "Bad" if hint_text else "Good"
                         if self.debug:
@@ -547,6 +594,7 @@ class QwenFCV3CoachHandler(QwenFCHandler):
 
                 if turn_done or final_response_data is None:
                     inference_data["message"].append(fc_message)
+                    current_step_inference_log.append(fc_message)
                     current_step_inference_log.append({
                         "role": "handler_log",
                         "content": "Turn ended (final coach accepted or retries exhausted).",

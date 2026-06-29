@@ -251,11 +251,33 @@ class QwenFCHintedHandler(QwenFCHandler):
         """
         Snapshot the attributes of all active backend instances.
         Only _api_description is excluded (boilerplate string, not useful to the judge).
+        _current_dir is serialized as a path string (e.g. "workspace/document") rather
+        than the full recursive Directory tree, so the judge can clearly see where the
+        model currently is without ambiguity.
         """
-        state = {
-            name: {k: v for k, v in vars(inst).items() if k != "_api_description"}
-            for name, inst in involved_instances.items()
-        }
+        try:
+            from bfcl_eval.eval_checker.multi_turn_eval.func_source_code.gorilla_file_system import Directory as _Directory
+        except ImportError:
+            _Directory = None
+
+        def _dir_path(d):
+            parts = []
+            while d is not None:
+                parts.append(d.name)
+                d = d.parent
+            return "/".join(reversed(parts))
+
+        state = {}
+        for name, inst in involved_instances.items():
+            attrs = {}
+            for k, v in vars(inst).items():
+                if k == "_api_description":
+                    continue
+                if k == "_current_dir" and _Directory is not None and isinstance(v, _Directory):
+                    attrs[k] = _dir_path(v)
+                else:
+                    attrs[k] = v
+            state[name] = attrs
         return json.dumps(state, indent=2, default=str)
 
     def _fmt_messages(self, msgs: list) -> str:
@@ -721,6 +743,7 @@ class QwenFCHintedHandler(QwenFCHandler):
                     # Mirror base handler: the final assistant message (text or
                     # empty FC) is committed to context so the next turn sees it.
                     inference_data["message"].append(fc_message)
+                    current_step_inference_log.append(fc_message)
                     current_step_inference_log.append({
                         "role": "handler_log",
                         "content": "Turn ended (Done verdict or retries exhausted).",
