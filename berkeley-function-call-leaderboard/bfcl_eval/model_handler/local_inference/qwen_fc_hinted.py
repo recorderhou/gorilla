@@ -23,6 +23,7 @@ import os
 import queue
 import re
 import threading
+import time
 from copy import deepcopy
 from typing import Optional
 
@@ -543,6 +544,7 @@ class QwenFCHintedHandler(QwenFCHandler):
 
         inference_data: dict = self._pre_query_processing_prompting(test_entry)
 
+        wall_t0 = time.perf_counter()
         for turn_idx, current_turn_message in enumerate(test_entry["question"]):
             # "Miss function" category: some tools are withheld at the start and
             # introduced mid-conversation as a synthetic user message.
@@ -590,6 +592,7 @@ class QwenFCHintedHandler(QwenFCHandler):
 
                 current_step_inference_log: list[dict] = []
                 current_turn_inference_log[f"step_{count}"] = current_step_inference_log
+                step_coach_latencies: list[float] = []
 
                 # ── Hint retry sub-loop ───────────────────────────────────────
                 #
@@ -650,12 +653,14 @@ class QwenFCHintedHandler(QwenFCHandler):
                     # can read what the model said, without mutating inference_data.
                     if not has_tool_call:
                         current_state = self._serialize_state(involved_instances)
+                        _ct = time.perf_counter()
                         verdict, complete_hint = self._run_complete_check(
                             inference_data["message"] + [fc_message],
                             inference_data["function"],
                             current_state,
                             user_request,
                         )
+                        step_coach_latencies.append(time.perf_counter() - _ct)
                         step_final_verdict = verdict
                         self._write_hint_log({
                             "type":          "complete_check",
@@ -694,6 +699,7 @@ class QwenFCHintedHandler(QwenFCHandler):
                             print(f"  [FC] {_n}({json.dumps(_a) if isinstance(_a, dict) else _a})")
                     if hint_retry < self.max_hint_retries:
                         current_state = self._serialize_state(involved_instances)
+                        _ct = time.perf_counter()
                         verdict, judge_raw = self._run_judge(
                             fc_message,
                             inference_data["message"],  # context the model actually saw
@@ -701,15 +707,18 @@ class QwenFCHintedHandler(QwenFCHandler):
                             inference_data["function"],
                             hint_history=step_hint_history,
                         )
+                        step_coach_latencies.append(time.perf_counter() - _ct)
                         step_final_verdict = verdict
                         if self.debug:
                             print(f"  [Judge] verdict={verdict}, retry={hint_retry}")
                             print(f"  [Judge Raw] {judge_raw[:500]}")
                         if verdict == "Bad":
+                            _ct = time.perf_counter()
                             hint_text = self._run_hinter(
                                 judge_raw, fc_message, inference_data["function"],
                                 hint_history=step_hint_history,
                             )
+                            step_coach_latencies.append(time.perf_counter() - _ct)
                             if self.debug:
                                 print(f"  [Hint] {hint_text!r}")
                             # Log the full correction event for offline analysis.
@@ -749,6 +758,7 @@ class QwenFCHintedHandler(QwenFCHandler):
                         "content": "Turn ended (Done verdict or retries exhausted).",
                         "hinted_step": hint_retry > 0,
                         "final_verdict": step_final_verdict,
+                        "coach_latency_s": sum(step_coach_latencies),
                     })
                     break
 
@@ -784,6 +794,7 @@ class QwenFCHintedHandler(QwenFCHandler):
                     "model_response_decoded": decoded,
                     "hinted_step": hint_retry > 0,
                     "final_verdict": step_final_verdict,
+                    "coach_latency_s": sum(step_coach_latencies),
                 })
 
                 # Execute the function calls against the backend instances and
@@ -833,6 +844,7 @@ class QwenFCHintedHandler(QwenFCHandler):
             "input_token_count": total_input_token_count,
             "output_token_count": total_output_token_count,
             "latency": total_latency,
+            "wall_clock_latency": time.perf_counter() - wall_t0,
             "inference_log": all_inference_log,
         }
         # Only include reasoning_content in metadata if any turn produced it.

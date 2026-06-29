@@ -19,6 +19,7 @@ import os
 import queue
 import re
 import threading
+import time
 from copy import deepcopy
 from typing import Optional
 
@@ -326,6 +327,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
 
         coach_instructions_total = 0  # per-task, never reset between turns
 
+        wall_t0 = time.perf_counter()
         for turn_idx, current_turn_message in enumerate(test_entry["question"]):
             if str(turn_idx) in holdout_function:
                 assert len(current_turn_message) == 0
@@ -370,6 +372,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
 
                 current_step_inference_log: list[dict] = []
                 current_turn_inference_log[f"step_{count}"] = current_step_inference_log
+                step_coach_latencies: list[float] = []
 
                 # True if the previous step's post-execution coach injected a guidance message.
                 coached_step = (
@@ -421,6 +424,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
 
                     if can_intervene:
                         current_state = self._serialize_state(involved_instances)
+                        _ct = time.perf_counter()
                         instruction = self._run_coach(
                             inference_data["message"],
                             current_state,
@@ -429,6 +433,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                             phase="after_attempted_final_answer",
                             instructions_used=coach_instructions_total,
                         )
+                        step_coach_latencies.append(time.perf_counter() - _ct)
                         self._write_hint_log({
                             "type":          "v1_coach_final",
                             "test_entry_id": test_entry_id,
@@ -461,6 +466,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                         "content": "Turn ended (text response, no further instruction).",
                         "hinted_step": coached_step,
                         "final_verdict": "silent",
+                        "coach_latency_s": sum(step_coach_latencies),
                     })
                     break
 
@@ -517,6 +523,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
 
                 if can_intervene:
                     current_state = self._serialize_state(involved_instances)
+                    _ct = time.perf_counter()
                     instruction = self._run_coach(
                         inference_data["message"],
                         current_state,
@@ -525,6 +532,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                         phase="after_tool_observation",
                         instructions_used=coach_instructions_total,
                     )
+                    step_coach_latencies.append(time.perf_counter() - _ct)
                     self._write_hint_log({
                         "type":          "v1_coach_tool",
                         "test_entry_id": test_entry_id,
@@ -546,6 +554,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                         "content": "Post-execution coach.",
                         "hinted_step": coached_step,
                         "final_verdict": "coached" if instruction else "silent",
+                        "coach_latency_s": sum(step_coach_latencies),
                     })
 
                 count += 1
@@ -580,6 +589,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
             "input_token_count": total_input_token_count,
             "output_token_count": total_output_token_count,
             "latency": total_latency,
+            "wall_clock_latency": time.perf_counter() - wall_t0,
             "inference_log": all_inference_log,
         }
         if not all(all(c == "" for c in turn_rc) for turn_rc in all_reasoning_content):

@@ -21,6 +21,7 @@ import os
 import queue
 import re
 import threading
+import time
 from copy import deepcopy
 from typing import Optional
 
@@ -432,6 +433,7 @@ class QwenFCV2CoachHandler(QwenFCHandler):
 
         inference_data: dict = self._pre_query_processing_prompting(test_entry)
 
+        wall_t0 = time.perf_counter()
         for turn_idx, current_turn_message in enumerate(test_entry["question"]):
             if str(turn_idx) in holdout_function:
                 assert len(current_turn_message) == 0
@@ -475,6 +477,7 @@ class QwenFCV2CoachHandler(QwenFCHandler):
 
                 current_step_inference_log: list[dict] = []
                 current_turn_inference_log[f"step_{count}"] = current_step_inference_log
+                step_coach_latencies: list[float] = []
 
                 # ── Hint retry sub-loop ───────────────────────────────────────
                 step_start_idx       = len(inference_data["message"])
@@ -515,12 +518,14 @@ class QwenFCV2CoachHandler(QwenFCHandler):
                     # ── No tool call: complete-check ──────────────────────────
                     if not has_tool_call:
                         current_state = self._serialize_state(involved_instances)
+                        _ct = time.perf_counter()
                         verdict, complete_hint = self._run_complete_check(
                             inference_data["message"] + [fc_message],
                             inference_data["function"],
                             current_state,
                             user_request,
                         )
+                        step_coach_latencies.append(time.perf_counter() - _ct)
                         step_final_verdict = verdict
                         self._write_hint_log({
                             "type":          "complete_check",
@@ -558,6 +563,7 @@ class QwenFCV2CoachHandler(QwenFCHandler):
 
                     if hint_retry < self.max_hint_retries:
                         current_state = self._serialize_state(involved_instances)
+                        _ct = time.perf_counter()
                         hint_text = self._run_coach(
                             fc_message,
                             inference_data["message"],
@@ -567,6 +573,7 @@ class QwenFCV2CoachHandler(QwenFCHandler):
                             hint_history=step_hint_history,
                             prev_step_result=prev_step_result,
                         )
+                        step_coach_latencies.append(time.perf_counter() - _ct)
                         step_final_verdict = "Bad" if hint_text else "Good"
                         if self.debug:
                             if hint_text:
@@ -604,6 +611,7 @@ class QwenFCV2CoachHandler(QwenFCHandler):
                         "content": "Turn ended (Done verdict or retries exhausted).",
                         "hinted_step": hint_retry > 0,
                         "final_verdict": step_final_verdict,
+                        "coach_latency_s": sum(step_coach_latencies),
                     })
                     break
 
@@ -634,6 +642,7 @@ class QwenFCV2CoachHandler(QwenFCHandler):
                     "model_response_decoded": decoded,
                     "hinted_step": hint_retry > 0,
                     "final_verdict": step_final_verdict,
+                    "coach_latency_s": sum(step_coach_latencies),
                 })
 
                 execution_results, involved_instances = execute_multi_turn_func_call(
@@ -679,6 +688,7 @@ class QwenFCV2CoachHandler(QwenFCHandler):
             "input_token_count": total_input_token_count,
             "output_token_count": total_output_token_count,
             "latency": total_latency,
+            "wall_clock_latency": time.perf_counter() - wall_t0,
             "inference_log": all_inference_log,
         }
         if not all(all(c == "" for c in turn_rc) for turn_rc in all_reasoning_content):
