@@ -63,11 +63,11 @@ Do NOT reveal the correct answer or the correct function call.
 Do NOT repeat hints that have already been given for this step.
 Only intervene when there is a clear, concrete problem with the planned call."""
 
-COACH_PROMPT = """## Task
-{user_request}
-
-## Available Tools
+COACH_PROMPT = """## Available Tools
 {schema}
+
+## Task
+{user_request}
 
 ## Conversation History (committed turns)
 {history}
@@ -92,17 +92,17 @@ COMPLETE_PROMPT = """You are reviewing a tool-use conversation turn.
 
 [CRITICAL] When in doubt, output Done. If the model has made reasonable progress or executed relevant tool calls, output Done.
 
-## User Request for This Turn
-{user_request}
-
 ## Available Tools
 {schema}
 
-## Current System State
-{current_state}
+## User Request for This Turn
+{user_request}
 
 ## Conversation History
 {history}
+
+## Current System State
+{current_state}
 
 Has the model fully completed the user's request for this turn, or does it still need to make function calls?
 
