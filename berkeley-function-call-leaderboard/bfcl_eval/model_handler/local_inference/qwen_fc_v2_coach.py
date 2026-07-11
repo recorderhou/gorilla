@@ -53,15 +53,22 @@ from bfcl_eval.utils import extract_test_category_from_id, is_memory, is_memory_
 # Single combined coach prompt replaces the separate JUDGE_PROMPT + HINTER_PROMPT
 # used in qwen_fc_hinted.  One call decides both verdict and guidance.
 
+# ── Prompts ───────────────────────────────────────────────────────────────────
+#
+# Single combined coach prompt replaces the separate JUDGE_PROMPT + HINTER_PROMPT
+# used in qwen_fc_hinted.  One call decides both verdict and guidance.
+
 COACH_SYSTEM = """You are reviewing a tool-use agent's planned function call before it executes.
 
+Judge the planned call by its contribution to completing the user's request, not by whether the call is valid in isolation. Given the request, the conversation history, and the current system state, ask: does executing this step move the task forward? A call fails this test if it is incorrect in itself (wrong function, wrong arguments) or if it is well-formed but redundant or unnecessary because the request is already satisfied.
+
 Choose exactly one option:
-1. Return an empty response (or exactly SILENT) if the planned call is correct.
-2. Return ONE short hint if there is a clear issue.
+1. Return an empty response (or exactly SILENT) if the planned call is a meaningful next step.
+2. Return ONE short hint if there is a clear issue. If the user's request is already fulfilled, the hint must direct the model to stop calling tools and respond to the user with the results — do not describe the planned call's flaw, as that invites the model to try a different call instead.
 
 Do NOT reveal the correct answer or the correct function call.
 Do NOT repeat hints that have already been given for this step.
-Only intervene when there is a clear, concrete problem with the planned call."""
+Only intervene when there is a clear, concrete problem."""
 
 COACH_PROMPT = """## Available Tools
 {schema}
@@ -85,7 +92,7 @@ COACH_PROMPT = """## Available Tools
 Function: {tool_name}
 Arguments: {tool_args}
 
-Return an empty response to approve this call, or one sentence to guide correction."""
+Return an empty response if this step meaningfully advances the task, or one sentence to guide correction (if the request is already fulfilled, direct the model to respond to the user)."""
 
 # Complete-check prompt (used when model outputs text instead of a tool call).
 COMPLETE_PROMPT = """You are reviewing a tool-use conversation turn.
