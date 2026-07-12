@@ -161,7 +161,16 @@ def run_case(handler, case, k, write_queue, step_stats):
 # ---------------------------------------------------------------------------
 # Verify diagnostics
 # ---------------------------------------------------------------------------
-def print_verify_report(all_results):
+def _leaf_steps(result):
+    """Flatten a (possibly nested) result into leaf step strings, any depth."""
+    if isinstance(result, list):
+        for item in result:
+            yield from _leaf_steps(item)
+    else:
+        yield result
+
+
+def print_verify_report(all_results, max_budget=0):
     print("\n" + "=" * 70)
     print("VERIFY REPORT")
     print("=" * 70)
@@ -174,10 +183,13 @@ def print_verify_report(all_results):
 
     parse_total = 0
     parse_failed = 0
+    coach_totals = {"checks": 0, "interv": 0, "trials": 0}
+    coach_max_budget = [max_budget]
+    coach_over_budget = [False]
 
     for case_id in sorted(by_case):
         trials = sorted(by_case[case_id], key=lambda e: int(e["id"].rsplit("_", 1)[-1]))
-        print(f"\n[{case_id}] first-step tool_call per trial:")
+        print(f"\n[{case_id}] first-step tool_call + coach usage per trial:")
         first_calls = []
         for entry in trials:
             t_idx = entry["id"].rsplit("_", 1)[-1]
@@ -190,16 +202,28 @@ def print_verify_report(all_results):
                     if isinstance(first_step, list) and first_step:
                         first_step = first_step[0]
             first_calls.append(first_step)
-            print(f"  trial_{t_idx}: {first_step}")
 
-            # parse failure stats
-            if isinstance(result, list):
-                for turn in result:
-                    if isinstance(turn, list):
-                        for step in turn:
-                            parse_total += 1
-                            if not step:
-                                parse_failed += 1
+            # coach usage (present for v1; absent for handlers that don't track it)
+            checks = entry.get("coach_checks")
+            interv = entry.get("coach_interventions")
+            if checks is not None:
+                over = coach_max_budget[0] and interv > coach_max_budget[0]
+                coach_str = f"  [coach {interv}/{checks} intervene/check]" + (" ⚠️OVER" if over else "")
+                coach_totals["checks"] += checks
+                coach_totals["interv"] += interv
+                coach_totals["trials"] += 1
+                if over:
+                    coach_over_budget[0] = True
+            else:
+                coach_str = "  [coach n/a]"
+            print(f"  trial_{t_idx}: {first_step}{coach_str}")
+
+            # parse failure stats: a leaf step counts as failed if it is empty
+            # or blank (any nesting depth).
+            for step in _leaf_steps(result):
+                parse_total += 1
+                if not (isinstance(step, str) and step.strip()):
+                    parse_failed += 1
 
         unique = len(set(str(c) for c in first_calls))
         if unique == 1:
@@ -209,6 +233,22 @@ def print_verify_report(all_results):
 
     print(f"\nParse failure rate: {parse_failed}/{parse_total} "
           f"({100*parse_failed/max(parse_total,1):.1f}%)")
+
+    if coach_totals["trials"]:
+        n = coach_totals["trials"]
+        c = coach_totals["checks"]
+        i = coach_totals["interv"]
+        print(f"Coach usage (over {n} trials): "
+              f"{c} checks, {i} interventions "
+              f"(avg {c/n:.1f} checks / {i/n:.1f} interventions per trial); "
+              f"intervene rate {100*i/max(c,1):.0f}% of checks")
+        max_budget = coach_max_budget[0]
+        if max_budget:
+            over = coach_over_budget[0]
+            status = "⚠️ some trials EXCEEDED budget!" if over else "✓ all within budget"
+            print(f"Per-task intervention budget = {max_budget}: {status}")
+    else:
+        print("Coach usage: n/a (handler does not report coach_checks/coach_interventions)")
     print("=" * 70 + "\n")
 
 
@@ -293,7 +333,8 @@ def main():
     print(f"\nDone. {len(all_results)} result entries written to {result_file}")
 
     if args.verify:
-        print_verify_report(all_results)
+        max_budget = getattr(handler, "max_coach_instructions", 0)
+        print_verify_report(all_results, max_budget=max_budget)
     else:
         with step_stats["lock"]:
             t, f_ = step_stats["total"], step_stats["failed"]
