@@ -48,18 +48,29 @@ from bfcl_eval.utils import extract_test_category_from_id, is_memory, is_memory_
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
-COACH_SYSTEM = """You are supervising a tool-use agent completing a multi-step task.
+COACH_SYSTEM = """You are a senior agent-task coach supervising a smaller tool-use agent.
 
-After each tool call and its observation, choose exactly one option:
-1. Stay silent — return an empty response or exactly SILENT.
-2. Return ONE short instruction for the agent's next step.
+After each small-model turn and tool observation, choose exactly one option:
+1. Stay silent by returning an empty response.
+2. Return one concise instruction for the small model's next step.
 
-Intervene only when it is likely to improve correctness. Do NOT:
-- Solve the task or reveal the correct answer
-- Give the exact function call, tool name, or argument values
-- Repeat guidance that has already been given
+You decide whether intervention is needed. Return SILENT unless the next action is likely to be invalid, repeated, unsupported by observations, or missing an important task constraint.
 
-If the current trajectory looks correct or sufficient, stay silent."""
+When you intervene, make it a useful next-tool suggestion:
+- Name the tool the small model should use next.
+- Include the critical argument, action, state, format, or verification constraint when it is visible in the conversation.
+- Keep it to one next step, not a plan or trajectory.
+
+Do not solve the task for the agent, do not reveal the final answer, and do not mention gold labels.
+
+If the current trajectory is already sufficient or the attempted final answer is supported, return an empty response. If your platform cannot emit an empty response, return exactly SILENT.
+
+Light-intervention mode:
+- Use at most one sentence.
+- Prefer silence unless there is a clear, concrete tool-use risk in the next step.
+- Do not provide a full command, tool-call JSON object, trajectory, or final answer.
+- Do not repeat prior guidance. If the agent already has enough evidence, stay silent.
+- Point only to the next tool/path/query/action constraint."""
 
 COACH_PROMPT = """## Task
 {user_request}
@@ -76,7 +87,7 @@ COACH_PROMPT = """## Task
 ## Conversation so far
 {history}
 {budget_info}
-Return an empty response to stay silent, or one short instruction for the agent's next step."""
+Return an empty response (or SILENT) if the trajectory is sufficient, or one next-tool suggestion if the next step is at risk."""
 
 
 # ── Handler ───────────────────────────────────────────────────────────────────
@@ -96,7 +107,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
         is_fc_model: bool,
         judge_api: Optional[str] = None,
         judge_model: Optional[str] = None,
-        max_coach_instructions: int = 0,     # 0 = unlimited per turn
+        max_coach_instructions: int = 4,     # 0 = unlimited per task
         max_judge_concurrency: int = 5,
         hint_log_path: Optional[str] = None,
         debug: Optional[bool] = None,
@@ -242,10 +253,10 @@ class QwenFCV1CoachHandler(QwenFCHandler):
         Ask the coach whether to intervene.  Returns "" to stay silent, or a
         one-sentence instruction for the agent's next step.
         """
-        budget_info = (
-            f"Instruction budget: {instructions_used}/{self.max_coach_instructions} already used for this task.\n"
-            if self.max_coach_instructions > 0 else ""
-        )
+        if self.max_coach_instructions <= 0:
+            budget_info = "Instruction budget: unlimited.\n"
+        else:
+            budget_info = f"Instruction budget: {instructions_used}/{self.max_coach_instructions} already used for this task.\n"
         prompt = COACH_PROMPT.format(
             user_request=user_request,
             schema=json.dumps(schema, indent=2),
@@ -325,7 +336,8 @@ class QwenFCV1CoachHandler(QwenFCHandler):
 
         inference_data: dict = self._pre_query_processing_prompting(test_entry)
 
-        coach_instructions_total = 0  # per-task, never reset between turns
+        coach_instructions_total = 0  # non-SILENT interventions; reset per trial
+        coach_checks_total = 0  # all LLM calls to coach; reset per trial
 
         wall_t0 = time.perf_counter()
         for turn_idx, current_turn_message in enumerate(test_entry["question"]):
@@ -433,6 +445,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                             phase="after_attempted_final_answer",
                             instructions_used=coach_instructions_total,
                         )
+                        coach_checks_total += 1
                         step_coach_latencies.append(time.perf_counter() - _ct)
                         self._write_hint_log({
                             "type":          "v1_coach_final",
@@ -532,6 +545,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                         phase="after_tool_observation",
                         instructions_used=coach_instructions_total,
                     )
+                    coach_checks_total += 1
                     step_coach_latencies.append(time.perf_counter() - _ct)
                     self._write_hint_log({
                         "type":          "v1_coach_tool",
@@ -590,6 +604,8 @@ class QwenFCV1CoachHandler(QwenFCHandler):
             "output_token_count": total_output_token_count,
             "latency": total_latency,
             "wall_clock_latency": time.perf_counter() - wall_t0,
+            "coach_checks": coach_checks_total,
+            "coach_interventions": coach_instructions_total,
             "inference_log": all_inference_log,
         }
         if not all(all(c == "" for c in turn_rc) for turn_rc in all_reasoning_content):
