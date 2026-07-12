@@ -67,19 +67,20 @@ def build_handler(handler_key, registry_name, temperature):
 # Data loading
 # ---------------------------------------------------------------------------
 def load_training_cases(verify=False):
+    # Use BFCL's own loader so entries get the "function" field injected from
+    # involved_classes (raw JSON has no "function" key). Reading the raw file
+    # directly would crash in _pre_query_processing_prompting with KeyError.
+    from bfcl_eval.utils import load_dataset_entry
+
+    all_entries = load_dataset_entry("multi_turn_base")
     cases = []
-    with open(DATA_FILE) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            entry = json.loads(line)
-            idx = int(entry["id"].rsplit("_", 1)[-1])
-            if verify:
-                if idx in (0, 1):
-                    cases.append(entry)
-            elif idx in TRAINING_INDICES:
+    for entry in all_entries:
+        idx = int(entry["id"].rsplit("_", 1)[-1])
+        if verify:
+            if idx in (0, 1):
                 cases.append(entry)
+        elif idx in TRAINING_INDICES:
+            cases.append(entry)
     return cases
 
 
