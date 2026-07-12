@@ -105,10 +105,13 @@ def writer_loop(write_queue, result_file):
         while True:
             item = write_queue.get()
             if item is None:
+                write_queue.task_done()  # account for the sentinel so wq.join() returns
                 break
-            f.write(json.dumps(make_json_serializable(item)) + "\n")
-            f.flush()
-            write_queue.task_done()
+            try:
+                f.write(json.dumps(make_json_serializable(item)) + "\n")
+                f.flush()
+            finally:
+                write_queue.task_done()
 
 
 # ---------------------------------------------------------------------------
