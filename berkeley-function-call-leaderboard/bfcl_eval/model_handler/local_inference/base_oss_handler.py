@@ -342,23 +342,20 @@ class OSSHandler(BaseHandler, EnforceOverrides):
             extra_body["skip_special_tokens"] = self.skip_special_tokens
 
         start_time = time.time()
-        if len(extra_body) > 0:
-            api_response = self.client.completions.create(
-                model=self.model_path_or_id,
-                temperature=self.temperature,
-                prompt=formatted_prompt,
-                max_tokens=leftover_tokens_count,
-                extra_body=extra_body,
-                timeout=72000,  # Avoid timeout errors
-            )
-        else:
-            api_response = self.client.completions.create(
-                model=self.model_path_or_id,
-                temperature=self.temperature,
-                prompt=formatted_prompt,
-                max_tokens=leftover_tokens_count,
-                timeout=72000,  # Avoid timeout errors
-            )
+        kwargs = dict(
+            model=self.model_path_or_id,
+            temperature=self.temperature,
+            prompt=formatted_prompt,
+            max_tokens=leftover_tokens_count,
+            timeout=72000,  # Avoid timeout errors
+        )
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+        if getattr(self, "top_p", None) is not None:
+            kwargs["top_p"] = self.top_p
+        if getattr(self, "seed", None) is not None:
+            kwargs["seed"] = self.seed
+        api_response = self.client.completions.create(**kwargs)
         end_time = time.time()
 
         return api_response, end_time - start_time
