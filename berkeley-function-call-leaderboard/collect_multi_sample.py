@@ -99,7 +99,9 @@ def get_result_file(registry_name):
 
 
 def writer_loop(write_queue, result_file):
-    with open(result_file, "a") as f:
+    # Open in "w": truncate once at the start of THIS run so re-running the same
+    # registry name overwrites cleanly instead of accumulating duplicate trials.
+    with open(result_file, "w") as f:
         while True:
             item = write_queue.get()
             if item is None:
@@ -231,8 +233,11 @@ def main():
     )
 
     # Ensure hint_log goes to correct place
+    # Own the hint_log path directly. setdefault would be defeated by an empty
+    # HINT_LOG_PATH exported upstream (empty string is falsy -> logging disabled),
+    # so assign unconditionally.
     hint_log_path = str(result_file.parent.parent / "hint_log.jsonl")
-    os.environ.setdefault("HINT_LOG_PATH", hint_log_path)
+    os.environ["HINT_LOG_PATH"] = hint_log_path
 
     print(f"Handler     : {args.handler}")
     print(f"Registry    : {registry_name}")
