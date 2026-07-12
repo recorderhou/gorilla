@@ -268,6 +268,9 @@ def main():
     parser.add_argument("--num-threads", type=int, default=10)
     parser.add_argument("--verify", action="store_true", help="2 cases × k trials with diagnostics")
     parser.add_argument("--output-dir", type=str, default=None)
+    parser.add_argument("--local-model-path", type=str, default=None,
+                        help="Local dir with the student model's config/tokenizer "
+                             "(needed to load the tokenizer; vLLM must already be running).")
     args = parser.parse_args()
 
     suffix = "verify" if args.verify else "multisample"
@@ -296,6 +299,19 @@ def main():
     # Build handler and set sampling params
     handler = build_handler(args.handler, registry_name, temperature=args.temperature)
     handler.top_p = args.top_p
+
+    # Load the tokenizer / max_context_length / model_path_or_id via the normal
+    # OSS setup path. skip_server_setup=True: vLLM is already running (started by
+    # the shell wrapper); this only loads the tokenizer and does a quick health
+    # check against the existing server — it does NOT start a new one.
+    print("Loading tokenizer via spin_up_local_server(skip_server_setup=True)…")
+    handler.spin_up_local_server(
+        num_gpus=1,
+        gpu_memory_utilization=0.9,
+        backend="vllm",
+        skip_server_setup=True,
+        local_model_path=args.local_model_path,
+    )
 
     # Writer thread
     result_file.parent.mkdir(parents=True, exist_ok=True)
