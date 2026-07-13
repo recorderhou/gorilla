@@ -123,6 +123,12 @@ class QwenFCV1CoachHandler(QwenFCHandler):
         self.judge_model = judge_model
         self.max_coach_instructions = max_coach_instructions
 
+        # Per-trajectory coach token accounting. Each trajectory runs on one
+        # thread in `bfcl generate`, so thread-local storage keeps token counts
+        # scoped to the current trajectory without threading the usage through
+        # _run_coach's return signature.
+        self._tls = threading.local()
+
         self._judge_semaphore = threading.Semaphore(max_judge_concurrency)
         if judge_api == "openai":
             self._judge_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -145,6 +151,31 @@ class QwenFCV1CoachHandler(QwenFCHandler):
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
+    def _reset_token_usage(self) -> None:
+        """Zero the current thread's (=current trajectory's) coach token counters."""
+        self._tls.prompt_tokens = 0
+        self._tls.completion_tokens = 0
+        self._tls.cached_tokens = 0
+
+    def _get_token_usage(self) -> dict:
+        return {
+            "coach_prompt_tokens": getattr(self._tls, "prompt_tokens", 0),
+            "coach_completion_tokens": getattr(self._tls, "completion_tokens", 0),
+            "coach_cached_tokens": getattr(self._tls, "cached_tokens", 0),
+        }
+
+    def _record_usage(self, usage) -> None:
+        """Accumulate an OpenAI usage object into the current thread's counters."""
+        if usage is None:
+            return
+        self._tls.prompt_tokens = getattr(self._tls, "prompt_tokens", 0) + (usage.prompt_tokens or 0)
+        self._tls.completion_tokens = getattr(self._tls, "completion_tokens", 0) + (usage.completion_tokens or 0)
+        cached = 0
+        details = getattr(usage, "prompt_tokens_details", None)
+        if details is not None:
+            cached = getattr(details, "cached_tokens", 0) or 0
+        self._tls.cached_tokens = getattr(self._tls, "cached_tokens", 0) + cached
+
     @retry_with_backoff(error_type=RateLimitError)
     def _call_openai(self, system: str, prompt: str) -> str:
         kwargs = {"max_completion_tokens": 1024}
@@ -158,6 +189,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
             ],
             **kwargs,
         )
+        self._record_usage(getattr(resp, "usage", None))
         return resp.choices[0].message.content.strip()
 
     def _call_anthropic(self, system: str, prompt: str) -> str:
@@ -338,6 +370,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
 
         coach_instructions_total = 0  # non-SILENT interventions; reset per trial
         coach_checks_total = 0  # all LLM calls to coach; reset per trial
+        self._reset_token_usage()  # per-trajectory coach token counters
 
         wall_t0 = time.perf_counter()
         for turn_idx, current_turn_message in enumerate(test_entry["question"]):
@@ -606,6 +639,7 @@ class QwenFCV1CoachHandler(QwenFCHandler):
             "wall_clock_latency": time.perf_counter() - wall_t0,
             "coach_checks": coach_checks_total,
             "coach_interventions": coach_instructions_total,
+            **self._get_token_usage(),
             "inference_log": all_inference_log,
         }
         if not all(all(c == "" for c in turn_rc) for turn_rc in all_reasoning_content):
