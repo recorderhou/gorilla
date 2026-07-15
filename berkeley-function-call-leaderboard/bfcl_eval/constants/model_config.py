@@ -58,7 +58,7 @@ from bfcl_eval.model_handler.local_inference.quick_testing_oss import (
     QuickTestingOSSHandler,
 )
 from bfcl_eval.model_handler.local_inference.qwen import QwenHandler
-from bfcl_eval.model_handler.local_inference.qwen_fc import QwenFCHandler
+from bfcl_eval.model_handler.local_inference.qwen_fc import QwenFCHandler, Qwen3FCHandler
 from bfcl_eval.model_handler.local_inference.qwen_fc_hinted import QwenFCHintedHandler
 from bfcl_eval.model_handler.local_inference.qwen_fc_v1_coach import QwenFCV1CoachHandler
 from bfcl_eval.model_handler.local_inference.qwen_fc_v2_coach import QwenFCV2CoachHandler

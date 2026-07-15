@@ -304,3 +304,19 @@ class QwenFCHandler(OSSHandler):
             except Exception as e:
                 pass
         return result
+
+
+class Qwen3FCHandler(QwenFCHandler):
+    """Qwen3 with thinking mode DISABLED.
+
+    Qwen3 defaults to thinking mode (emits a <think>...</think> block before the
+    answer). QwenFCHandler's _format_prompt ends the prompt at
+    '<|im_start|>assistant\\n', leaving thinking on. This subclass prefills an
+    empty think block, which is exactly the official chat template's
+    enable_thinking=False form, forcing the model straight to the tool call.
+    Everything else (tool-call parsing, </think> stripping) is inherited.
+    """
+
+    @override
+    def _format_prompt(self, messages, function):
+        return super()._format_prompt(messages, function) + "<think>\n\n</think>\n\n"
