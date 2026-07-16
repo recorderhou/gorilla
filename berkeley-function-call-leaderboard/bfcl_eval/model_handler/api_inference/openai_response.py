@@ -101,7 +101,10 @@ class OpenAIResponsesHandler(BaseHandler):
             "model": self.model_name,
             "store": False,
             "include": ["reasoning.encrypted_content"],
-            "reasoning": {"summary": "auto"},
+            # effort=minimal keeps a reasoning model acting as a clean FC actor
+            # (matches the collaborator's gpt-5 coach); heavy reasoning is what
+            # produced the multi_turn tool-call decode failures. Override via env.
+            "reasoning": {"summary": "auto", "effort": os.environ.get("OPENAI_REASONING_EFFORT", "minimal")},
             "temperature": self.temperature,
         }
 
@@ -220,7 +223,10 @@ class OpenAIResponsesHandler(BaseHandler):
             "model": self.model_name,
             "store": False,
             "include": ["reasoning.encrypted_content"],
-            "reasoning": {"summary": "auto"},
+            # effort=minimal keeps a reasoning model acting as a clean FC actor
+            # (matches the collaborator's gpt-5 coach); heavy reasoning is what
+            # produced the multi_turn tool-call decode failures. Override via env.
+            "reasoning": {"summary": "auto", "effort": os.environ.get("OPENAI_REASONING_EFFORT", "minimal")},
             "temperature": self.temperature,
         }
 

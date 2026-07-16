@@ -179,7 +179,16 @@ class QwenFCV1CoachHandler(QwenFCHandler):
     @retry_with_backoff(error_type=RateLimitError)
     def _call_openai(self, system: str, prompt: str) -> str:
         kwargs = {"max_completion_tokens": 1024}
-        if not (self.judge_model.startswith("o") or self.judge_model.startswith("gpt-5")):
+        if self.judge_model.startswith("o") or self.judge_model.startswith("gpt-5"):
+            # Reasoning models: no temperature. Use minimal reasoning to match the
+            # collaborator's coach (same-table comparison) and keep the 1024
+            # completion budget for the visible hint/verdict, not reasoning tokens.
+            # Override with COACH_REASONING_EFFORT (e.g. "default" to unset, for the
+            # default-vs-minimal back-to-back).
+            effort = os.environ.get("COACH_REASONING_EFFORT", "minimal")
+            if effort and effort.lower() != "default":
+                kwargs["reasoning_effort"] = effort
+        else:
             kwargs["temperature"] = 0
         resp = self._judge_client.chat.completions.create(
             model=self.judge_model,
