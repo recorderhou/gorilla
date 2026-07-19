@@ -51,11 +51,11 @@ def _import_handlers():
     return {"v1fix": QwenFCV1CoachHandler, "v2fix": QwenFCV2CoachHandler}
 
 
-def build_handler(handler_key, registry_name, temperature):
+def build_handler(handler_key, registry_name, temperature, base_model="Qwen/Qwen2.5-3B-Instruct"):
     handlers = _import_handlers()
     cls = handlers[handler_key]
     handler = cls(
-        model_name="Qwen/Qwen2.5-3B-Instruct",
+        model_name=base_model,
         temperature=temperature,
         registry_name=registry_name,
         is_fc_model=True,
@@ -271,10 +271,13 @@ def main():
     parser.add_argument("--local-model-path", type=str, default=None,
                         help="Local dir with the student model's config/tokenizer "
                              "(needed to load the tokenizer; vLLM must already be running).")
+    parser.add_argument("--base-model", type=str, default="Qwen/Qwen2.5-3B-Instruct",
+                        help="student model name (handler model_name); also sets the registry tag.")
     args = parser.parse_args()
 
     suffix = "verify" if args.verify else "multisample"
-    registry_name = f"qwen2.5-3b-{args.handler}-{suffix}-FC"
+    tag = args.base_model.split("/")[-1].replace("-Instruct", "").lower()   # qwen2.5-3b / qwen2.5-7b
+    registry_name = f"{tag}-{args.handler}-{suffix}-FC"
     result_file = get_result_file(registry_name) if not args.output_dir else (
         Path(args.output_dir) / "multi_turn" / "BFCL_v4_multi_turn_base_result.json"
     )
@@ -297,7 +300,7 @@ def main():
     print(f"Cases loaded: {len(cases)} {'(verify mode)' if args.verify else ''}")
 
     # Build handler and set sampling params
-    handler = build_handler(args.handler, registry_name, temperature=args.temperature)
+    handler = build_handler(args.handler, registry_name, temperature=args.temperature, base_model=args.base_model)
     handler.top_p = args.top_p
 
     # Load the tokenizer / max_context_length / model_path_or_id via the normal
