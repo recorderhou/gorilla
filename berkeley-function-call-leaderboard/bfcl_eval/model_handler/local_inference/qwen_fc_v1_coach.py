@@ -72,6 +72,14 @@ Light-intervention mode:
 - Do not repeat prior guidance. If the agent already has enough evidence, stay silent.
 - Point only to the next tool/path/query/action constraint."""
 
+# Optional addendum (env COACH_PERTURB_AWARE=1): meta-knowledge that the setting may be
+# incomplete (a needed function/parameter can be absent), so the coach guides the agent to
+# RECOGNIZE the gap instead of forcing a call that cannot work. Guarded against misuse so
+# it does not hurt normal (complete) tasks.
+COACH_PERTURB_AWARE_NOTE = """
+
+Also note: the available tools or a required argument may be INCOMPLETE — a needed function may be unavailable, or a required parameter may be missing from what the user provided. If (and only if) the next step genuinely cannot be done because a function/parameter is truly absent — not a mistake the agent can fix — guide the agent to RECOGNIZE and handle the gap (e.g. tell the user it cannot be completed, ask for the missing parameter, or use an available alternative) rather than forcing a call that cannot work. Do NOT invent missing tools when the needed tools are actually present; only raise this when the gap is real."""
+
 COACH_PROMPT = """## Task
 {user_request}
 
@@ -306,7 +314,12 @@ class QwenFCV1CoachHandler(QwenFCHandler):
             history=self._fmt_messages(history),
             budget_info=budget_info,
         )
-        raw = self._call_llm(COACH_SYSTEM, prompt)
+        coach_system = COACH_SYSTEM + (
+            COACH_PERTURB_AWARE_NOTE
+            if os.environ.get("COACH_PERTURB_AWARE", "").lower() in ("1", "true", "yes")
+            else ""
+        )
+        raw = self._call_llm(coach_system, prompt)
         raw = re.sub(r"^```\w*\s*\n?(.*?)\n?```\s*$", r"\1", raw.strip(), flags=re.DOTALL).strip()
         if raw.upper() in {"SILENT", "NONE", "NO INSTRUCTION", "NO-OP", "NOOP", ""}:
             return ""
