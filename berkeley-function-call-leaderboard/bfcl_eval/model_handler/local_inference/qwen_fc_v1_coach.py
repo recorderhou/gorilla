@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import random
 import re
 import threading
 import time
@@ -98,6 +99,19 @@ COACH_PROMPT = """## Task
 Return an empty response (or SILENT) if the trajectory is sufficient, or one next-tool suggestion if the next step is at risk."""
 
 
+# Card B placebo pool (env PLACEBO_HINT=1): content-free, task-agnostic nudges injected at
+# the SAME positions/budget the real coach would fire, with zero LLM cost. Isolates the
+# ACT of injecting a supervisory turn from the coach's task-specific CONTENT. If placebo
+# ≈ pure-SFT (no lift) while real coach lifts +20pp, the content — not the nudge — is what matters.
+PLACEBO_HINTS = [
+    "Consider whether the next step is necessary and pick the most appropriate tool.",
+    "Double-check the arguments for your next tool call before making it.",
+    "Make sure your next action aligns with what the user asked for.",
+    "Review the most recent tool output before deciding your next step.",
+    "Proceed with the next appropriate tool call.",
+]
+
+
 # ── Handler ───────────────────────────────────────────────────────────────────
 
 class QwenFCV1CoachHandler(QwenFCHandler):
@@ -129,6 +143,11 @@ class QwenFCV1CoachHandler(QwenFCHandler):
 
         self.judge_api   = judge_api
         self.judge_model = judge_model
+        # Budget-sweep hook (Card B ablation): MAX_COACH_INSTRUCTIONS env overrides the
+        # constructor default so the ablation shell can sweep 1/2/3/4 without CLI plumbing.
+        _env_budget = os.environ.get("MAX_COACH_INSTRUCTIONS", "")
+        if _env_budget.strip():
+            max_coach_instructions = int(_env_budget)
         self.max_coach_instructions = max_coach_instructions
 
         # Per-trajectory coach token accounting. Each trajectory runs on one
@@ -289,6 +308,40 @@ class QwenFCV1CoachHandler(QwenFCHandler):
             })
         return log
 
+    @staticmethod
+    def _had_tool_error(execution_results: list) -> bool:
+        """True if any tool result this step is an error surface — a raised exception
+        (`Error during execution: ...`) or a domain function's error payload
+        (`{"error": ...}` / `status: "error"`). Used by COACH_TRIGGER=error* to gate
+        the coach to REACTIVE-only (fire only after the student has actually erred)."""
+        for r in execution_results:
+            s = (r if isinstance(r, str) else str(r)).strip()
+            if s.startswith("Error during execution:"):
+                return True
+            low = s.lower()
+            if '"error"' in low or "'error'" in low:
+                return True
+            if '"status": "error"' in low or "'status': 'error'" in low:
+                return True
+        return False
+
+    def _should_intervene(self, phase: str, had_error: bool) -> bool:
+        """Card B COACH_TRIGGER gate (default `always` = current full-coach behavior).
+          always        — every consult (① reactive + ② proactive-补漏 + ③ proactive-拦).
+          error         — only after a tool error (pure ①; loses ②③, and the premature-text catch).
+          error_or_text — after a tool error OR an attempted-final-answer text step
+                          (reactive: error-fix + premature-give-up catch; still loses proactive ②③).
+          text          — only on text steps (diagnostic; never on tool observations)."""
+        trigger = os.environ.get("COACH_TRIGGER", "always").strip().lower()
+        if trigger in ("", "always"):
+            return True
+        if phase == "after_attempted_final_answer":
+            return trigger in ("text", "error_or_text")
+        # phase == "after_tool_observation"
+        if trigger in ("error", "error_or_text"):
+            return had_error
+        return False  # "text": never intervene on tool observations
+
     def _run_coach(
         self,
         history: list,
@@ -302,6 +355,18 @@ class QwenFCV1CoachHandler(QwenFCHandler):
         Ask the coach whether to intervene.  Returns "" to stay silent, or a
         one-sentence instruction for the agent's next step.
         """
+        # DISABLE_COACH=1 → never intervene (always silent), and never call the
+        # coach LLM. Turns this handler into a plain student sampler, so the same
+        # multisample-collection pipeline yields the no-coach STaR/self-training
+        # k=8 rollouts (bare student, temperature sampling) for the matched
+        # "does the coach help in the k=8 regime?" baseline.
+        if os.environ.get("DISABLE_COACH", "").lower() in ("1", "true", "yes"):
+            return ""
+        # PLACEBO_HINT=1 → inject a content-free nudge instead of consulting the coach LLM.
+        # The caller has already applied COACH_TRIGGER + budget gating, so the placebo fires
+        # at the same positions/frequency the real coach would, at ~zero cost. Content-vs-nudge control.
+        if os.environ.get("PLACEBO_HINT", "").lower() in ("1", "true", "yes"):
+            return random.choice(PLACEBO_HINTS)
         if self.max_coach_instructions <= 0:
             budget_info = "Instruction budget: unlimited.\n"
         else:
@@ -487,7 +552,9 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                     can_intervene = (
                         self.max_coach_instructions <= 0
                         or coach_instructions_total < self.max_coach_instructions
-                    ) and count < MAXIMUM_STEP_LIMIT
+                    ) and count < MAXIMUM_STEP_LIMIT and self._should_intervene(
+                        "after_attempted_final_answer", False
+                    )
 
                     if can_intervene:
                         current_state = self._serialize_state(involved_instances)
@@ -587,7 +654,9 @@ class QwenFCV1CoachHandler(QwenFCHandler):
                 can_intervene = (
                     self.max_coach_instructions <= 0
                     or coach_instructions_total < self.max_coach_instructions
-                ) and count < MAXIMUM_STEP_LIMIT - 1
+                ) and count < MAXIMUM_STEP_LIMIT - 1 and self._should_intervene(
+                    "after_tool_observation", self._had_tool_error(execution_results)
+                )
 
                 if can_intervene:
                     current_state = self._serialize_state(involved_instances)
