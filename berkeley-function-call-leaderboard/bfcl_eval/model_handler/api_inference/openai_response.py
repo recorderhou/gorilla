@@ -113,6 +113,7 @@ class OpenAIResponsesHandler(BaseHandler):
             "o3" in self.model_name
             or "o4-mini" in self.model_name
             or "gpt-5" in self.model_name
+            or "gpt-6" in self.model_name
         ):
             del kwargs["temperature"]
 
@@ -235,6 +236,7 @@ class OpenAIResponsesHandler(BaseHandler):
             "o3" in self.model_name
             or "o4-mini" in self.model_name
             or "gpt-5" in self.model_name
+            or "gpt-6" in self.model_name
         ):
             del kwargs["temperature"]
 
