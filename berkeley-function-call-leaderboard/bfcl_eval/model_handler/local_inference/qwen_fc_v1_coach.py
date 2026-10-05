@@ -206,12 +206,14 @@ class QwenFCV1CoachHandler(QwenFCHandler):
     @retry_with_backoff(error_type=RateLimitError)
     def _call_openai(self, system: str, prompt: str) -> str:
         kwargs = {"max_completion_tokens": 1024}
-        if self.judge_model.startswith("o") or self.judge_model.startswith("gpt-5"):
-            # Reasoning models: no temperature. Use minimal reasoning to match the
-            # collaborator's coach (same-table comparison) and keep the 1024
-            # completion budget for the visible hint/verdict, not reasoning tokens.
-            # Override with COACH_REASONING_EFFORT (e.g. "default" to unset, for the
-            # default-vs-minimal back-to-back).
+        if self.judge_model.startswith(("o", "gpt-5", "gpt-6")):
+            # Reasoning models (o*, gpt-5*, gpt-6*): no temperature. Use the lowest
+            # effort to match the collaborator's coach (same-table comparison) and keep
+            # the 1024 completion budget for the visible hint/verdict, not reasoning
+            # tokens. The floor differs per family — gpt-5 supports "minimal", gpt-6
+            # (astra) only "low" — so the caller MUST pass the right value via
+            # COACH_REASONING_EFFORT (e.g. minimal for gpt-5, low for gpt-6). Default
+            # "minimal" is valid for gpt-5 only. "default" leaves it unset.
             effort = os.environ.get("COACH_REASONING_EFFORT", "minimal")
             if effort and effort.lower() != "default":
                 kwargs["reasoning_effort"] = effort
