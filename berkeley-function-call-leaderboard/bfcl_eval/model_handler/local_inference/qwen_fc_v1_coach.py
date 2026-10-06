@@ -81,20 +81,26 @@ COACH_PERTURB_AWARE_NOTE = """
 
 Also note: the available tools or a required argument may be INCOMPLETE — a needed function may be unavailable, or a required parameter may be missing from what the user provided. If (and only if) the next step genuinely cannot be done because a function/parameter is truly absent — not a mistake the agent can fix — guide the agent to RECOGNIZE and handle the gap (e.g. tell the user it cannot be completed, ask for the missing parameter, or use an available alternative) rather than forcing a call that cannot work. Do NOT invent missing tools when the needed tools are actually present; only raise this when the gap is real."""
 
+# Field order is cache-optimized: static (task/tools) + append-only (history) come
+# FIRST so the longest-identical-prefix spans the whole conversation across repeated
+# consults in a trajectory; the per-step volatile fields (current_state, phase,
+# budget) come LAST so only a small tail misses the prompt cache. Putting
+# current_state before history (the old order) broke the cacheable prefix at the
+# first changing byte → only the static head cached (~35%).
 COACH_PROMPT = """## Task
 {user_request}
 
 ## Available Tools
 {schema}
 
+## Conversation so far
+{history}
+
 ## Current System State
 {current_state}
 
 ## Phase
 {phase}
-
-## Conversation so far
-{history}
 {budget_info}
 Return an empty response (or SILENT) if the trajectory is sufficient, or one next-tool suggestion if the next step is at risk."""
 
